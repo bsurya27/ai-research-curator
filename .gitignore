@@ -143,9 +143,10 @@ venv/
 ENV/
 env.bak/
 venv.bak/
-
+curator
 # Spyder project settings
-.spyderproject
+.spyderp
+roject
 .spyproject
 
 # Rope project settings
@@ -205,3 +206,6 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+accounts.db
+experiments/embedding_exp_1/old_data
+experiments/embedding_exp_1/data

@@ -1,0 +1,6 @@
+# Direct dependencies (scraping/ + experiments/embedding_exp_1/)
+arxiv==2.4.1
+httpx==0.28.1
+praw==7.8.1
+python-dotenv==1.2.2
+twscrape==0.17.0
