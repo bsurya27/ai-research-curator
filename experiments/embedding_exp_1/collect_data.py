@@ -58,15 +58,27 @@ logger = logging.getLogger("collect_data")
 # ---------------------------------------------------------------------------
 _CS_CATS = "(cat:cs.LG OR cat:cs.AI OR cat:cs.CL OR cat:cs.CV OR cat:cs.IR)"
 
+# ARXIV_QUERIES = [
+#     f"{_CS_CATS} AND RAG retrieval augmented generation",
+#     f"{_CS_CATS} AND LLM agents tool use",
+#     f"{_CS_CATS} AND vision language models spatial reasoning",
+#     f"{_CS_CATS} AND LoRA fine-tuning efficient",
+#     f"{_CS_CATS} AND query routing LLM",
+#     f"{_CS_CATS} AND multimodal large language model",
+#     f"{_CS_CATS} AND vision language model VLM",
+# ]
+# ARXIV_QUERIES = [
+#     f"{_CS_CATS} AND retrieval augmented generation knowledge",     # RAG focused
+#     f"{_CS_CATS} AND LLM agent planning tool calling",              # agents tighter  
+#     f"{_CS_CATS} AND vision language model VLM benchmark",          # multimodal
+#     f"{_CS_CATS} AND LoRA parameter efficient fine-tuning PEFT",    # finetuning specific
+#     f"{_CS_CATS} AND instruction tuning supervised fine-tuning SFT", # more finetuning
+# ]
 ARXIV_QUERIES = [
-    f"{_CS_CATS} AND RAG retrieval augmented generation",
-    f"{_CS_CATS} AND LLM agents tool use",
-    f"{_CS_CATS} AND vision language models spatial reasoning",
-    f"{_CS_CATS} AND LoRA fine-tuning efficient",
-    f"{_CS_CATS} AND query routing LLM",
-    f"{_CS_CATS} AND multimodal large language model",
-    f"{_CS_CATS} AND vision language model VLM",
+    f"{_CS_CATS} AND (fine-tuning OR finetuning) AND large language model",
+    f"{_CS_CATS} AND LoRA PEFT adapter language model"
 ]
+
 
 DEVTO_QUERIES = [
     "LLM agents",
@@ -78,17 +90,17 @@ DEVTO_QUERIES = [
 DEVTO_TOP_TAGS = ["machinelearning", "ai", "llm"]
 
 REDDIT_QUERIES = [
-    "agentic AI",
-    "RAG",
-    "multimodal models",
-    "LLM fine-tuning",
+    "retrieval augmented generation",
+    "LLM fine-tuning"
 ]
 
-REDDIT_SUBREDDITS = ["MachineLearning", "LocalLLaMA", "artificial"]
+REDDIT_SUBREDDITS = ["Rag"]
 # REDDIT_SUBREDDITS = ["artificial"]
 
-TWITTER_QUERIES = [
-    "finetuning"
+TWITTER_QUERIES =  [
+    "retrieval augmented generation",
+    "LLM fine-tuning",
+    "LORA finetuning"
 ]
 
 # ---------------------------------------------------------------------------
