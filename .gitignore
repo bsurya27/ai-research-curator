@@ -209,3 +209,6 @@ __marimo__/
 accounts.db
 experiments/embedding_exp_1/old_data
 experiments/embedding_exp_1/data
+experiments/embedding_exp_1/models/
+experiments/embedding_exp_1/plots
+rec_model/data

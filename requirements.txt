@@ -1,6 +1,16 @@
-# Direct dependencies (scraping/ + experiments/embedding_exp_1/)
+# Direct dependencies (scraping/ + experiments/embedding_exp_1/ + rec_model/)
 arxiv==2.4.1
 httpx==0.28.1
 praw==7.8.1
 python-dotenv==1.2.2
 twscrape==0.17.0
+
+# rec_model/
+openai>=1.40.0
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+chromadb>=0.5.0
+numpy>=1.26.0
+scikit-learn>=1.4.0
+sentence-transformers>=3.0.0
+voyageai>=0.2.0
