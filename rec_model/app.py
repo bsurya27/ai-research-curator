@@ -2,6 +2,7 @@
 
 import json
 import logging
+import math
 import os
 from pathlib import Path
 from typing import Any
@@ -147,29 +148,42 @@ async def score(body: ScoreRequest) -> dict[str, Any]:
 
 class UpdateBody(BaseModel):
     url: str
-    signal: str
     source: str
-    step_size: float = 0.1
+    score: float
 
 
 @app.post("/update")
 async def update_pref(body: UpdateBody) -> dict[str, Any]:
-    if body.signal not in ("like", "dislike"):
-        raise HTTPException(status_code=422, detail='signal must be "like" or "dislike"')
+    if math.isclose(body.score, 3.0, rel_tol=0.0, abs_tol=1e-9):
+        return {
+            "updated": False,
+            "skipped": True,
+            "reason": "neutral",
+            "score": body.score,
+            "source": body.source,
+        }
+    step_size = abs(body.score - 3.0) * 0.05
+    signal = "like" if body.score > 3.0 else "dislike"
     emb = _get_embedding_for_url(body.url)
     if emb is None:
         raise HTTPException(status_code=404, detail="item not found")
     current = load_preference(EMBEDDING_DIM)
-    updated = update_preference(current, emb, body.signal, body.step_size)
+    updated = update_preference(current, emb, signal, step_size)
     save_preference(updated)
     weights = _load_source_weights()
     if body.source in weights:
-        if body.signal == "like":
+        if signal == "like":
             weights[body.source] *= 1.05
         else:
             weights[body.source] *= 0.95
         _save_source_weights(weights)
-    return {"updated": True, "signal": body.signal, "source": body.source}
+    return {
+        "updated": True,
+        "signal": signal,
+        "source": body.source,
+        "score": body.score,
+        "step_size": step_size,
+    }
 
 
 @app.get("/clusters")

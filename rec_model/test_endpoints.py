@@ -193,7 +193,7 @@ def main() -> None:
         summary[5] = (False, str(e))
 
     # Step 6
-    print("\n=== Step 6: Like signal ===")
+    print("\n=== Step 6: Like (score > 3) ===")
     try:
         if not top_for_update:
             raise RuntimeError("No top item from step 5")
@@ -201,8 +201,8 @@ def main() -> None:
             "/update",
             json={
                 "url": top_for_update["url"],
-                "signal": "like",
                 "source": top_for_update["source"],
+                "score": 4.0,
             },
         )
         if ur.status_code != 200:
@@ -217,7 +217,7 @@ def main() -> None:
         summary[6] = (False, str(e))
 
     # Step 7
-    print("\n=== Step 7: Dislike signal ===")
+    print("\n=== Step 7: Dislike (score < 3) ===")
     try:
         if not bottom_for_update:
             raise RuntimeError("No bottom item from step 5")
@@ -225,8 +225,8 @@ def main() -> None:
             "/update",
             json={
                 "url": bottom_for_update["url"],
-                "signal": "dislike",
                 "source": bottom_for_update["source"],
+                "score": 2.0,
             },
         )
         if dr.status_code != 200:
@@ -302,8 +302,8 @@ def main() -> None:
         3: "Health check again",
         4: "Clusters",
         5: "Score batch",
-        6: "Like signal",
-        7: "Dislike signal",
+        6: "Like (score)",
+        7: "Dislike (score)",
         8: "Score after updates",
         9: "Final health check",
     }
