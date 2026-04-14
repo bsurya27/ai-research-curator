@@ -453,6 +453,26 @@ def run() -> None:
     write_briefing(briefing_content, BRIEFING_OUTPUT_PATH)
     logger.log("briefing_written", {"path": BRIEFING_OUTPUT_PATH})
 
+    # Step 9b — Send SNS notification
+    if os.getenv("STORAGE_BACKEND") == "s3":
+        try:
+            import boto3
+
+            sns = boto3.client(
+                "sns",
+                aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+                aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+                region_name=os.getenv("AWS_REGION", "us-east-1"),
+            )
+            sns.publish(
+                TopicArn=os.getenv("SNS_TOPIC_ARN", ""),
+                Subject="Your research briefing is ready",
+                Message="Your daily AI research briefing is ready. Open the reporter to read it.",
+            )
+            logger.log("sns_notification_sent", {})
+        except Exception as e:
+            logger.log("sns_notification_error", {"error": str(e)})
+
     # Step 10 — Clear signals
     clear_signals(SIGNALS_PATH)
     logger.log("signals_cleared", {})
