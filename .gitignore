@@ -143,11 +143,8 @@ venv/
 ENV/
 env.bak/
 venv.bak/
-curator
 # Spyder project settings
-.spyderp
-roject
-.spyproject
+.spyproject/
 
 # Rope project settings
 .ropeproject
@@ -211,8 +208,18 @@ experiments/embedding_exp_1/old_data
 experiments/embedding_exp_1/data
 experiments/embedding_exp_1/models/
 experiments/embedding_exp_1/plots
-rec_model/data
 
+# --- ai-research-curator (local data, secrets, EC2 artifacts) ---
+.env
+rec_model/data/
+curation_agent/data/
+reporter/data/
+logs/
+__pycache__/
+*.pyc
+*.pem
+curator/
+*.egg-info/
+.DS_Store
+*.tar.gz
 curation_agent/curatorEC2key.pem
-
-/logs/
