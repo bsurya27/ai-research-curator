@@ -1,8 +1,10 @@
+import os
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import boto3
 import httpx
 from scraping import search_arxiv, scrape_subreddits, search_twitter
 
@@ -10,13 +12,38 @@ REC_MODEL_URL = "http://localhost:8000"
 TIMEOUT = 60.0
 
 
+def _s3_client():
+    return boto3.client(
+        "s3",
+        aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+        aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+        region_name=os.getenv("AWS_REGION", "us-east-1"),
+    )
+
+
+def _is_s3() -> bool:
+    return os.getenv("STORAGE_BACKEND", "local") == "s3"
+
+
+S3_BUCKET = os.getenv("S3_BUCKET", "")
+
+
 def read_signals(signals_path: str) -> list[dict]:
     """Read signals.txt, return list of {score, url, source, timestamp}."""
-    p = Path(signals_path)
-    if not p.is_file():
-        return []
+    if _is_s3():
+        try:
+            obj = _s3_client().get_object(Bucket=S3_BUCKET, Key="signals.txt")
+            content = obj["Body"].read().decode("utf-8")
+        except Exception:
+            return []
+    else:
+        p = Path(signals_path)
+        if not p.is_file():
+            return []
+        content = p.read_text(encoding="utf-8")
+
     out: list[dict] = []
-    for line in p.read_text(encoding="utf-8").splitlines():
+    for line in content.splitlines():
         line = line.strip()
         if not line or line.startswith("#"):
             continue
@@ -100,16 +127,26 @@ def score_items(items: list[dict]) -> list[dict]:
 
 def write_briefing(content: str, output_path: str) -> None:
     """Save briefing markdown to output_path."""
-    p = Path(output_path)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(content, encoding="utf-8")
+    if _is_s3():
+        _s3_client().put_object(
+            Bucket=S3_BUCKET,
+            Key="briefing.md",
+            Body=content.encode("utf-8"),
+        )
+    else:
+        p = Path(output_path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(content, encoding="utf-8")
 
 
 def clear_signals(signals_path: str) -> None:
     """Clear signals.txt after processing."""
-    p = Path(signals_path)
-    if p.is_file():
-        p.write_text("", encoding="utf-8")
+    if _is_s3():
+        _s3_client().put_object(Bucket=S3_BUCKET, Key="signals.txt", Body=b"")
+    else:
+        p = Path(signals_path)
+        if p.is_file():
+            p.write_text("", encoding="utf-8")
 
 
 def scrape_arxiv(query: str, max_results: int = 25, days_back: int = 14) -> list[dict]:

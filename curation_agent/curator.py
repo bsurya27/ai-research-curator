@@ -5,13 +5,23 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
+import time
 from pathlib import Path
 from typing import Any
-import time
+
 from dotenv import load_dotenv
 
+_ROOT = Path(__file__).resolve().parents[1]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+import httpx
+
 from logger import RunLogger
+from rec_model.preference import S3_BUCKET, _is_s3, _preference_path, _s3_client
 from tools import (
+    REC_MODEL_URL,
     clear_signals,
     embed_item,
     get_clusters,
@@ -43,6 +53,38 @@ REDDIT_AVAILABLE_SUBREDDITS = [
     "LanguageModeling",
 ]
 ANTHROPIC_MODEL = "claude-sonnet-4-20250514"
+
+_QUERY_JSON_INSTRUCTIONS = (
+    "\n\nRespond with a single JSON object only, with keys arxiv, reddit, twitter.\n"
+    "- arxiv: array of non-empty search query strings.\n"
+    "- twitter: array of non-empty search query strings.\n"
+    "- reddit: either (1) an array of query strings for keyword search only "
+    "(default subreddit listing will be used), or (2) an object "
+    '{"subreddits": ["name1", ...], "queries": ["keyword1", ...]} '
+    "where subreddits are chosen only from reddit_available_subreddits in the context, "
+    "and queries are keyword searches on Reddit."
+)
+
+
+def _is_cold_start() -> bool:
+    try:
+        health = httpx.get(f"{REC_MODEL_URL}/health", timeout=10.0).json()
+        return int(health.get("item_count", 0)) < 50
+    except Exception:
+        return False
+
+
+def _load_cold_start_keywords() -> list[str]:
+    if _is_s3():
+        try:
+            obj = _s3_client().get_object(Bucket=S3_BUCKET, Key="cold_start.json")
+            return json.loads(obj["Body"].read().decode("utf-8")).get("keywords", [])
+        except Exception:
+            return []
+    p = _preference_path().parent / "cold_start.json"
+    if p.is_file():
+        return json.loads(p.read_text(encoding="utf-8")).get("keywords", [])
+    return []
 
 
 def _parse_json_object(text: str) -> dict:
@@ -97,14 +139,56 @@ def _queries_from_claude(
     user_text = (
         "Context JSON:\n"
         + json.dumps(payload, indent=2, ensure_ascii=False)
-        + "\n\nRespond with a single JSON object only, with keys arxiv, reddit, twitter.\n"
-        "- arxiv: array of non-empty search query strings.\n"
-        "- twitter: array of non-empty search query strings.\n"
-        "- reddit: either (1) an array of query strings for keyword search only "
-        "(default subreddit listing will be used), or (2) an object "
-        '{"subreddits": ["name1", ...], "queries": ["keyword1", ...]} '
-        "where subreddits are chosen only from reddit_available_subreddits in the context, "
-        "and queries are keyword searches on Reddit."
+        + _QUERY_JSON_INSTRUCTIONS
+    )
+    client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", "").strip() or None)
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            msg = client.messages.create(
+                model=ANTHROPIC_MODEL,
+                max_tokens=4096,
+                system=system_prompt or "You are a helpful assistant.",
+                messages=[{"role": "user", "content": user_text}],
+            )
+            break
+        except Exception as e:
+            if "529" in str(e) or "overloaded" in str(e).lower():
+                if attempt < max_retries - 1:
+                    wait = 2**attempt * 5  # 5s, 10s, 20s
+                    time.sleep(wait)
+                    continue
+            raise
+    raw = msg.content[0].text
+    data = _parse_json_object(raw)
+    out: dict[str, Any] = {}
+    for key in ("arxiv", "twitter"):
+        v = data.get(key, [])
+        if isinstance(v, str):
+            out[key] = [v] if v.strip() else []
+        elif isinstance(v, list):
+            out[key] = [str(x).strip() for x in v if str(x).strip()]
+        else:
+            out[key] = []
+    out["reddit"] = _normalize_reddit_queries_value(data.get("reddit", []))
+    return out
+
+
+def _queries_from_claude_cold_start(
+    keywords: list[str],
+    system_prompt: str,
+    reddit_subreddit_catalog: list[str],
+) -> dict[str, Any]:
+    import anthropic
+
+    payload = {
+        "user_interests": keywords,
+        "reddit_available_subreddits": reddit_subreddit_catalog,
+    }
+    user_text = (
+        "Context JSON:\n"
+        + json.dumps(payload, indent=2, ensure_ascii=False)
+        + _QUERY_JSON_INSTRUCTIONS
     )
     client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", "").strip() or None)
     msg = client.messages.create(
@@ -137,12 +221,23 @@ def _briefing_from_claude(top_15: list[dict], system_prompt: str) -> str:
         + "\n\nWrite a markdown briefing for the reader. Use headings and links where appropriate."
     )
     client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", "").strip() or None)
-    msg = client.messages.create(
-        model=ANTHROPIC_MODEL,
-        max_tokens=8192,
-        system=system_prompt or "You are a helpful assistant.",
-        messages=[{"role": "user", "content": user_text}],
-    )
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            msg = client.messages.create(
+                model=ANTHROPIC_MODEL,
+                max_tokens=8192,
+                system=system_prompt or "You are a helpful assistant.",
+                messages=[{"role": "user", "content": user_text}],
+            )
+            break
+        except Exception as e:
+            if "529" in str(e) or "overloaded" in str(e).lower():
+                if attempt < max_retries - 1:
+                    wait = 2**attempt * 5  # 5s, 10s, 20s
+                    time.sleep(wait)
+                    continue
+            raise
     return msg.content[0].text
 
 
@@ -186,19 +281,40 @@ def run() -> None:
     )
 
     # Step 4 — Query generation (Claude)
-    query_prompt_path = BASE / "prompts" / "query_generation.txt"
-    query_system = query_prompt_path.read_text(encoding="utf-8")
-    try:
-        generated_queries = _queries_from_claude(
-            clusters_data, query_system, REDDIT_AVAILABLE_SUBREDDITS
-        )
-    except Exception as e:
-        generated_queries = {
-            "arxiv": [],
-            "reddit": {"subreddits": None, "queries": []},
-            "twitter": [],
-        }
-        logger.log("queries_generated_error", {"error": str(e)})
+    cold_start = _is_cold_start()
+    cold_start_keywords = _load_cold_start_keywords() if cold_start else []
+    logger.log(
+        "cold_start_detected",
+        {"cold_start": cold_start, "keywords": cold_start_keywords if cold_start else []},
+    )
+    if cold_start:
+        query_prompt_path = BASE / "prompts" / "query_generation_cold_start.txt"
+        query_system = query_prompt_path.read_text(encoding="utf-8")
+        try:
+            generated_queries = _queries_from_claude_cold_start(
+                cold_start_keywords, query_system, REDDIT_AVAILABLE_SUBREDDITS
+            )
+        except Exception as e:
+            generated_queries = {
+                "arxiv": [],
+                "reddit": {"subreddits": None, "queries": []},
+                "twitter": [],
+            }
+            logger.log("queries_generated_error", {"error": str(e)})
+    else:
+        query_prompt_path = BASE / "prompts" / "query_generation.txt"
+        query_system = query_prompt_path.read_text(encoding="utf-8")
+        try:
+            generated_queries = _queries_from_claude(
+                clusters_data, query_system, REDDIT_AVAILABLE_SUBREDDITS
+            )
+        except Exception as e:
+            generated_queries = {
+                "arxiv": [],
+                "reddit": {"subreddits": None, "queries": []},
+                "twitter": [],
+            }
+            logger.log("queries_generated_error", {"error": str(e)})
     logger.log("queries_generated", {"queries": generated_queries})
 
     # Step 5 — Scrape
@@ -340,6 +456,23 @@ def run() -> None:
     # Step 10 — Clear signals
     clear_signals(SIGNALS_PATH)
     logger.log("signals_cleared", {})
+
+    # Step 11 — Upload log to S3
+    if os.getenv("STORAGE_BACKEND") == "s3":
+        try:
+            import boto3
+
+            s3 = boto3.client(
+                "s3",
+                aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+                aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+                region_name=os.getenv("AWS_REGION", "us-east-1"),
+            )
+            log_key = f"logs/{logger.log_path.name}"
+            s3.upload_file(str(logger.log_path), os.getenv("S3_BUCKET", ""), log_key)
+            print(f"Log uploaded to s3://{os.getenv('S3_BUCKET')}/{log_key}")
+        except Exception as e:
+            print(f"Log upload failed: {e}")
 
 
 if __name__ == "__main__":

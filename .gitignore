@@ -212,3 +212,7 @@ experiments/embedding_exp_1/data
 experiments/embedding_exp_1/models/
 experiments/embedding_exp_1/plots
 rec_model/data
+
+curation_agent/curatorEC2key.pem
+
+/logs/

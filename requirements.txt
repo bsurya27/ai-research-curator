@@ -1,4 +1,5 @@
 # Direct dependencies (scraping/ + experiments/embedding_exp_1/ + rec_model/)
+boto3>=1.35.0
 streamlit>=1.40.0
 anthropic>=0.40.0
 arxiv==2.4.1

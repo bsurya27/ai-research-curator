@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+import boto3
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
@@ -21,6 +22,22 @@ from scorer import score_items
 from vector_store import get_all_embeddings, get_collection, store_item, url_item_id
 
 logger = logging.getLogger(__name__)
+
+
+def _s3_client():
+    return boto3.client(
+        "s3",
+        aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+        aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+        region_name=os.getenv("AWS_REGION", "us-east-1"),
+    )
+
+
+def _is_s3() -> bool:
+    return os.getenv("STORAGE_BACKEND", "local") == "s3"
+
+
+S3_BUCKET = os.getenv("S3_BUCKET", "")
 
 app = FastAPI()
 
@@ -41,6 +58,14 @@ def _source_weights_path() -> Path:
 
 
 def _load_source_weights() -> dict[str, float]:
+    if _is_s3():
+        try:
+            obj = _s3_client().get_object(Bucket=S3_BUCKET, Key="source_weights.json")
+            raw = json.loads(obj["Body"].read().decode("utf-8"))
+            out = {k: float(raw.get(k, 1.0)) for k in SOURCE_KEYS}
+            return _normalize_source_weights(out)
+        except Exception:
+            return _normalize_source_weights({k: 1.0 for k in SOURCE_KEYS})
     path = _source_weights_path()
     if not path.is_file():
         return {k: 1.0 for k in SOURCE_KEYS}
@@ -63,9 +88,17 @@ def _normalize_source_weights(w: dict[str, float]) -> dict[str, float]:
 
 
 def _save_source_weights(w: dict[str, float]) -> None:
+    norm = _normalize_source_weights(w)
+    if _is_s3():
+        try:
+            body = json.dumps(norm, indent=2).encode("utf-8")
+            _s3_client().put_object(Bucket=S3_BUCKET, Key="source_weights.json", Body=body)
+        except Exception as e:
+            logger.exception("save source_weights failed: %s", e)
+            raise
+        return
     path = _source_weights_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    norm = _normalize_source_weights(w)
     try:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(norm, f, indent=2)
