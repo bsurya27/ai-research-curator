@@ -11,13 +11,17 @@ export $(grep -v '^#' .env | xargs)
 # Restore ChromaDB from S3 if local copy doesn't exist
 CHROMA_DIR="$PROJECT_DIR/rec_model/data/chroma"
 if [ ! -d "$CHROMA_DIR" ]; then
-    echo "ChromaDB not found locally, restoring from S3..."
-    aws s3 cp s3://$S3_BUCKET/chroma.tar.gz /tmp/chroma.tar.gz --region $AWS_REGION
-    mkdir -p $PROJECT_DIR/rec_model/data
-    tar -xzf /tmp/chroma.tar.gz -C $PROJECT_DIR/rec_model/data/
-    echo "ChromaDB restored."
-else
-    echo "ChromaDB found locally, skipping restore."
+    echo "ChromaDB not found locally, checking S3..."
+    if aws s3 ls s3://$S3_BUCKET/chroma.tar.gz --region $AWS_REGION > /dev/null 2>&1; then
+        echo "Restoring ChromaDB from S3..."
+        aws s3 cp s3://$S3_BUCKET/chroma.tar.gz /tmp/chroma.tar.gz --region $AWS_REGION
+        mkdir -p $PROJECT_DIR/rec_model/data
+        tar -xzf /tmp/chroma.tar.gz -C $PROJECT_DIR/rec_model/data/
+        echo "ChromaDB restored."
+    else
+        echo "No ChromaDB backup found in S3, starting fresh."
+        mkdir -p $PROJECT_DIR/rec_model/data
+    fi
 fi
 
 # Start rec model
