@@ -4,7 +4,7 @@ set -e
 PROJECT_DIR="/home/ec2-user/ai-research-curator"
 cd $PROJECT_DIR
 chmod +x "$PROJECT_DIR/startup.sh" "$PROJECT_DIR/shutdown.sh"
-
+git pull origin main
 # Load env vars
 export $(grep -v '^#' .env | xargs)
 

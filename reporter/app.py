@@ -109,7 +109,7 @@ def _source_from_url(url: str) -> str:
         return "twitter"
     if "dev.to" in u:
         return "devto"
-    return "arxiv"
+    return "reddit"
 
 
 def _also_one_line(note: str) -> str:
@@ -159,7 +159,7 @@ def _parse_briefing_md(md: str) -> tuple[list[dict], list[dict]]:
             i += 1
         while body_lines and not body_lines[-1].strip():
             body_lines.pop()
-        source = "arxiv"
+        source = _source_from_url(url)
         if body_lines and _TAG_LINE.match(body_lines[-1].strip()):
             source = _TAG_LINE.match(body_lines[-1].strip()).group(1).lower()
             summary_lines = body_lines[:-1]
