@@ -23,7 +23,16 @@ if [ ! -d "$CHROMA_DIR" ]; then
         mkdir -p $PROJECT_DIR/rec_model/data
     fi
 fi
+# Pull latest secrets from SSM
+echo "Pulling secrets from SSM..."
+APIFY_API_TOKEN=$(aws ssm get-parameter --name /curator/APIFY_API_TOKEN --with-decryption --query Parameter.Value --output text --region $AWS_REGION)
+ANTHROPIC_API_KEY=$(aws ssm get-parameter --name /curator/ANTHROPIC_API_KEY --with-decryption --query Parameter.Value --output text --region $AWS_REGION)
+OPENAI_API_KEY=$(aws ssm get-parameter --name /curator/OPENAI_API_KEY --with-decryption --query Parameter.Value --output text --region $AWS_REGION)
 
+# Update .env with latest values
+sed -i "s/APIFY_API_TOKEN=.*/APIFY_API_TOKEN=$APIFY_API_TOKEN/" .env
+sed -i "s/ANTHROPIC_API_KEY=.*/ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY/" .env
+sed -i "s/OPENAI_API_KEY=.*/OPENAI_API_KEY=$OPENAI_API_KEY/" .env
 # Start rec model
 source venv/bin/activate
 echo "Starting rec model..."
