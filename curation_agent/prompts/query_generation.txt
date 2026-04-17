@@ -11,16 +11,15 @@ STRUCTURAL QUERY RULES — ALWAYS FOLLOW THESE:
    - BAD: "RAG", "LLM", "VLM", "PEFT"
    - GOOD: "retrieval augmented generation", "large language model"
 
-2. Every query must have at least 4-5 meaningful words. Pair the concept with a specific technique, method, or application.
-
-3. ArXiv queries must always start with the category filter:
+2. ArXiv queries must always start with the category filter:
    (cat:cs.LG OR cat:cs.AI OR cat:cs.CL OR cat:cs.CV OR cat:cs.IR) AND {full concept} {specific technique}
+   Pair the concept with a specific technique, method, or application.
 
-4. Reddit queries should use conversational phrasing — write how a practitioner would post, not how a paper is titled.
+3. Reddit queries should use conversational phrasing — write how a practitioner would post, not how a paper is titled.
   - BAD Reddit: "video multimodal models frame sampling temporal encoding"  
   - GOOD Reddit: "how are people handling video in their RAG pipelines?"
   
-5. Twitter queries should be broad and conversational — focus on what practitioners tweet about.
+4. Twitter queries should be broad and conversational — focus on what practitioners tweet about.
   - BAD Twitter: "video understanding vision language models efficiency"
   - GOOD Twitter: "best VLM papers this week" or "RAG in production tips"
 

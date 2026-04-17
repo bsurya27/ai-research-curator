@@ -11,7 +11,7 @@ Write in a personal, direct tone — like a knowledgeable friend briefing him, n
 Structure:
 1. A one-line opener setting the tone for today's content
 
-2. **Main picks** — 6 most interesting items (not just highest score — consider novelty, practical relevance, diversity of topics and sources):
+2. **Main picks** — 5-8 most interesting items (not just highest score — consider novelty, practical relevance, diversity of topics and sources):
    - Heading with title as hyperlink to URL
    - 2-4 sentences: what it is, why it matters to Surya, what he might do with it
    - Source tag: [arxiv] [reddit] [twitter]

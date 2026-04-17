@@ -149,17 +149,17 @@ def clear_signals(signals_path: str) -> None:
             p.write_text("", encoding="utf-8")
 
 
-def scrape_arxiv(query: str, max_results: int = 25, days_back: int = 14) -> list[dict]:
+def scrape_arxiv(query: str, max_results: int = 25, days_back: int = 7) -> list[dict]:
     """Wrapper around search_arxiv."""
     return search_arxiv(query, max_results=max_results, days_back=days_back)
 
 
-def scrape_reddit(subreddits: list[str], max_results: int = 20, days_back: int = 3) -> list[dict]:
+def scrape_reddit(subreddits: list[str], max_results: int = 20, days_back: int = 1) -> list[dict]:
     """Wrapper around scrape_subreddits."""
     return scrape_subreddits(subreddits=subreddits, max_results=max_results, days_back=days_back)
 
 
-def scrape_twitter(query: str, max_results: int = 25, days_back: int = 7) -> list[dict]:
+def scrape_twitter(query: str, max_results: int = 25, days_back: int = 4) -> list[dict]:
     """Wrapper around search_twitter."""
     return search_twitter(query, max_results=max_results, days_back=days_back)
 
