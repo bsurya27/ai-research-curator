@@ -315,6 +315,14 @@ def run() -> None:
                 "twitter": [],
             }
             logger.log("queries_generated_error", {"error": str(e)})
+    logger.log(
+        "query_generation_prompt",
+        {
+            "prompt_file": query_prompt_path.name,
+            "cold_start": cold_start,
+            "system_prompt": query_system,
+        },
+    )
     logger.log("queries_generated", {"queries": generated_queries})
 
     # Step 5 — Scrape
@@ -443,6 +451,10 @@ def run() -> None:
     )
     curation_prompt_path = BASE / "prompts" / "curation_and_writing.txt"
     curation_system = curation_prompt_path.read_text(encoding="utf-8")
+    logger.log(
+        "briefing_system_prompt",
+        {"prompt_file": curation_prompt_path.name, "system_prompt": curation_system},
+    )
     try:
         briefing_content = _briefing_from_claude(top_15, curation_system)
     except Exception as e:

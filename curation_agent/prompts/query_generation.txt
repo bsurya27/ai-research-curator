@@ -19,7 +19,8 @@ STRUCTURAL QUERY RULES — ALWAYS FOLLOW THESE:
   - BAD Reddit: "video multimodal models frame sampling temporal encoding"  
   - GOOD Reddit: "how are people handling video in their RAG pipelines?"
   
-4. Twitter queries should be broad and conversational — focus on what practitioners tweet about.
+4. Twitter queries should be simple and conversational — focus on what practitioners tweet about. 
+   You do not need to keep the twitter queries very key wordy, just plan and simple. 
   - BAD Twitter: "video understanding vision language models efficiency"
   - GOOD Twitter: "best VLM papers this week" or "RAG in production tips"
 
