@@ -1,0 +1,845 @@
+:root {
+  --bg: #0a0a14;
+  --bg-gradient: radial-gradient(ellipse at top, #15152a 0%, #0a0a14 55%, #05050c 100%);
+  --panel: rgba(14, 14, 26, 0.6);
+  --panel-border: rgba(255, 255, 255, 0.06);
+  --text: #e8e8f0;
+  --text-muted: #8888a0;
+  --text-dim: #5a5a70;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+}
+
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background: var(--bg-gradient);
+  z-index: -2;
+}
+
+body::after {
+  content: '';
+  position: fixed; inset: 0;
+  background-image:
+    radial-gradient(1px 1px at 20% 30%, rgba(255, 255, 255, 0.18) 0, transparent 50%),
+    radial-gradient(1px 1px at 70% 80%, rgba(255, 255, 255, 0.12) 0, transparent 50%),
+    radial-gradient(1px 1px at 45% 60%, rgba(255, 255, 255, 0.1) 0, transparent 50%),
+    radial-gradient(1px 1px at 85% 15%, rgba(255, 255, 255, 0.14) 0, transparent 50%),
+    radial-gradient(1px 1px at 10% 75%, rgba(255, 255, 255, 0.1) 0, transparent 50%);
+  z-index: -1; pointer-events: none;
+}
+
+body {
+  display: grid;
+  grid-template-rows: 64px 1fr;
+}
+
+/* ─── TOP BAR ────────────────────────────────────────────────────────────── */
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 28px;
+  border-bottom: 1px solid var(--panel-border);
+  background: rgba(10, 10, 20, 0.5);
+  backdrop-filter: blur(12px);
+  z-index: 10;
+}
+
+.title-block h1 {
+  font-size: 15px; font-weight: 600; letter-spacing: 0.02em;
+  background: linear-gradient(90deg, #fff 0%, #b8b8d0 100%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.title-block .subtitle {
+  font-size: 11px; color: var(--text-muted);
+  letter-spacing: 0.08em; text-transform: uppercase;
+  margin-top: 2px;
+}
+
+.breadcrumb { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+.breadcrumb .crumb {
+  background: transparent; border: 1px solid transparent;
+  color: var(--text-muted);
+  padding: 6px 14px; border-radius: 999px;
+  font-size: 12px; font-family: inherit; font-weight: 500;
+  letter-spacing: 0.04em; cursor: pointer;
+  transition: all 180ms ease;
+  max-width: 320px;
+  white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.breadcrumb .crumb.active {
+  color: var(--text);
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+}
+.breadcrumb .crumb:not(.active):hover { color: var(--text); }
+.breadcrumb .crumb:disabled, .breadcrumb .crumb:not([onclick]) { cursor: default; }
+.breadcrumb .sep { color: var(--text-dim); font-size: 12px; }
+
+.actions .repo-link {
+  color: var(--text-muted); text-decoration: none;
+  font-size: 12px; letter-spacing: 0.04em;
+  padding: 6px 12px; border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: all 180ms ease;
+  white-space: nowrap;
+}
+.actions .repo-link:hover {
+  color: var(--text);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+/* ─── MAIN SPLIT: CANVAS + EXPLAINER ──────────────────────────────────────── */
+.main {
+  display: grid;
+  grid-template-columns: 1fr 440px;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.canvas-wrap {
+  position: relative;
+  overflow: hidden;
+  border-right: 1px solid var(--panel-border);
+}
+
+#canvas { width: 100%; height: 100%; display: block; }
+
+.legend {
+  position: absolute; bottom: 14px; left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px; color: var(--text-dim);
+  letter-spacing: 0.04em; text-transform: uppercase;
+  pointer-events: none;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.canvas-controls {
+  position: absolute; top: 14px; right: 14px;
+  display: flex; gap: 6px;
+  z-index: 5;
+}
+
+.canvas-controls button {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  background: rgba(20, 20, 36, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-muted);
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  transition: all 160ms ease;
+}
+.canvas-controls button:hover {
+  color: var(--text);
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(30, 30, 50, 0.9);
+}
+
+.explainer {
+  background: var(--panel);
+  backdrop-filter: blur(8px);
+  overflow-y: auto;
+  border-left: 1px solid var(--panel-border);
+}
+
+/* ─── PANEL CONTENT ───────────────────────────────────────────────────────── */
+.panel-content { padding: 28px 28px 60px; }
+
+.panel-content .kicker {
+  font-size: 10px; letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.panel-content h2 {
+  font-size: 22px; font-weight: 600;
+  letter-spacing: -0.01em;
+  margin-bottom: 14px;
+  line-height: 1.25;
+}
+
+.panel-content p {
+  color: var(--text);
+  font-size: 14px; line-height: 1.65;
+  margin-bottom: 14px;
+}
+
+.panel-content h3 {
+  font-size: 11px; font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 22px 0 10px;
+}
+
+.panel-content code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12.5px;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 1px 6px; border-radius: 4px;
+  color: #d8d8e8;
+}
+
+.panel-content .annotation {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--panel-border);
+  border-left: 2px solid rgba(255, 107, 157, 0.6);
+  padding: 10px 14px;
+  border-radius: 6px;
+  margin: 14px 0;
+  line-height: 1.55;
+}
+
+.step-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.step-list li {
+  display: flex;
+  gap: 14px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 180ms ease;
+  align-items: flex-start;
+  border: 1px solid transparent;
+}
+
+.step-list li:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.step-list li .step-num {
+  flex: 0 0 28px;
+  height: 28px; width: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ff6b9d 0%, #c06cf2 100%);
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2px;
+}
+
+.step-list li strong {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+
+.step-list li .step-sum {
+  display: block;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.zoom-deeper { margin: 22px 0 8px; }
+
+.zoom-deeper button,
+.step-nav .nav-btn {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--text);
+  background: rgba(255, 107, 157, 0.12);
+  border: 1px solid rgba(255, 107, 157, 0.3);
+  padding: 10px 18px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 180ms ease;
+}
+
+.zoom-deeper button:hover,
+.step-nav .nav-btn:hover {
+  background: rgba(255, 107, 157, 0.2);
+  border-color: rgba(255, 107, 157, 0.5);
+  transform: translateY(-1px);
+}
+
+.step-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+.step-nav .nav-btn {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--panel-border);
+  font-size: 12px;
+  padding: 8px 14px;
+  color: var(--text-muted);
+}
+.step-nav .nav-btn:hover { color: var(--text); background: rgba(255, 255, 255, 0.08); }
+
+.tool-list {
+  list-style: none;
+  padding: 0;
+}
+
+.tool-list li {
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--panel-border);
+  margin-bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tool-list li code {
+  font-size: 12.5px;
+  color: #ffd787;
+  background: transparent;
+  padding: 0;
+}
+
+.tool-list li span {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.tool-list li a {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: #87c9ff;
+  text-decoration: none;
+  margin-top: 4px;
+}
+.tool-list li a:hover { text-decoration: underline; }
+
+/* ─── SVG: L1 NODES AND EDGES ─────────────────────────────────────────────── */
+.node rect {
+  transition: all 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.node text {
+  fill: var(--text);
+  font-family: 'Inter', sans-serif;
+  pointer-events: none;
+  user-select: none;
+}
+
+.label {
+  font-size: 14px; font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.sublabel {
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  fill: var(--text-muted) !important;
+}
+
+.edge {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.18);
+  stroke-width: 1.5;
+}
+
+/* Plain-language L1 step labels positioned around the number */
+.step-label {
+  fill: rgba(255, 255, 255, 0.78);
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  pointer-events: none;
+  user-select: none;
+}
+
+.node-sublabel {
+  fill: rgba(255, 255, 255, 0.45);
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Pan cursor */
+#canvas { cursor: grab; }
+#canvas:active { cursor: grabbing; }
+.step-marker, .step-marker * { cursor: pointer !important; }
+.tool-card, .tool-card * { cursor: default; }
+
+/* ─── Step markers: cyclic chase around the loop ──────────────────────────── */
+/* Total cycle = 15s (10 steps × 1.5s each). Every step lights up for ~1.4s
+ * relative to its own delay, then dims again. Arrow, number ring, and label
+ * all share the same delay so they highlight together. `backwards` fill-mode
+ * ensures the "off" state is applied during the initial delay of cycle 1. */
+
+@keyframes step-chase-ring {
+  0%, 9%   {
+    stroke: rgba(255, 107, 157, 0.95);
+    stroke-width: 3;
+    filter: drop-shadow(0 0 10px rgba(255, 107, 157, 0.7));
+  }
+  10%, 100% {
+    stroke: rgba(255, 255, 255, 0.14);
+    stroke-width: 1.5;
+    filter: none;
+  }
+}
+
+@keyframes step-chase-core {
+  0%, 9%   { fill: #ffe6f0; }
+  10%, 100% { fill: #fff; }
+}
+
+@keyframes step-chase-label {
+  0%, 9%   { fill: #fff; font-weight: 600; }
+  10%, 100% { fill: rgba(255, 255, 255, 0.58); font-weight: 500; }
+}
+
+@keyframes step-chase-arrow {
+  0%, 9%   {
+    stroke: rgba(255, 107, 157, 0.95);
+    stroke-width: 2.5;
+    filter: drop-shadow(0 0 8px rgba(255, 107, 157, 0.55));
+  }
+  10%, 100% {
+    stroke: rgba(255, 255, 255, 0.18);
+    stroke-width: 1.5;
+    filter: none;
+  }
+}
+
+.step-marker .step-ring {
+  stroke: rgba(255, 255, 255, 0.14);
+  stroke-width: 1.5;
+  animation: step-chase-ring 15s linear infinite;
+  animation-delay: var(--step-delay, 0s);
+}
+.step-marker .step-core {
+  fill: #fff;
+  animation: step-chase-core 15s linear infinite;
+  animation-delay: var(--step-delay, 0s);
+}
+.step-marker .step-label {
+  fill: rgba(255, 255, 255, 0.58);
+  animation: step-chase-label 15s linear infinite;
+  animation-delay: var(--step-delay, 0s);
+}
+.step-arrow {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.18);
+  stroke-width: 1.5;
+  animation: step-chase-arrow 15s linear infinite;
+  animation-delay: var(--step-delay, 0s);
+}
+
+.step-marker.hover .step-ring {
+  animation: none;
+  stroke: rgba(255, 107, 157, 0.95);
+  stroke-width: 3;
+  filter: drop-shadow(0 0 10px rgba(255, 107, 157, 0.7));
+}
+.step-marker.hover .step-core { animation: none; fill: #ffe6f0; }
+.step-marker.hover .step-label { animation: none; fill: #fff; }
+.step-arrow.hover {
+  animation: none;
+  stroke: rgba(255, 107, 157, 0.95);
+  stroke-width: 2.5;
+  filter: drop-shadow(0 0 10px rgba(255, 107, 157, 0.6));
+}
+
+/* ─── L2 cycle scene ──────────────────────────────────────────────────────── */
+/* The chase is driven by JS (single setInterval toggling `.lit` on one group
+ * at a time) — every element inside a group flips on the exact same tick, so
+ * there's no timing drift between the SVG arrow/ring and the HTML caption. */
+
+/* ── Default (dim) state for every cycle arrow ────────────────────────────── */
+.cycle-arrow {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.24);
+  stroke-width: 1.5;
+}
+.cycle-arrow.dashed { stroke-dasharray: 9 7; }
+
+.cycle-marker .cycle-ring {
+  stroke: rgba(255, 255, 255, 0.18);
+  stroke-width: 1.5;
+  fill: rgba(10, 10, 20, 0.88);
+}
+.cycle-marker .cycle-core { fill: #fff; }
+.cycle-marker .cycle-num {
+  font-size: 13px;
+  font-weight: 600;
+  fill: #1a1a2e;
+}
+
+.cycle-caption {
+  font-size: 14.5px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.72);
+  text-align: center;
+  letter-spacing: 0.01em;
+  pointer-events: none;
+}
+.cycle-caption.side       { text-align: right; }
+.cycle-caption.side-right { text-align: left;  }
+
+.cycle-details {
+  text-align: center;
+  color: rgba(255, 255, 255, 0.42);
+  pointer-events: none;
+}
+.cycle-details.side       { text-align: right; }
+.cycle-details.side-right { text-align: left;  }
+.cycle-detail {
+  font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: inherit;
+}
+
+/* Used when a caption sits on its own arrow — small dark pad so the line
+   behind the text doesn't bleed through. */
+.cycle-caption.with-bg,
+.cycle-details.with-bg {
+  background: rgba(10, 12, 24, 0.92);
+  padding: 4px 10px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+/* Context arrows (the dotted off-scene hints) are a touch dimmer by default. */
+.cycle-arrow-group.context .cycle-arrow {
+  stroke: rgba(255, 255, 255, 0.22);
+  stroke-width: 1.4;
+}
+.cycle-arrow-group.context .cycle-ring {
+  stroke: rgba(255, 255, 255, 0.22);
+}
+.cycle-arrow-group.context .cycle-core { fill: rgba(255, 255, 255, 0.65); }
+.cycle-arrow-group.context .cycle-num  { fill: rgba(30, 30, 50, 0.9); font-weight: 500; }
+
+/* ── Lit state (toggled by JS) — full-brightness for main arrows ──────────── */
+.cycle-arrow-group.lit .cycle-arrow {
+  stroke: rgba(255, 107, 157, 0.95);
+  stroke-width: 2.5;
+  filter: drop-shadow(0 0 8px rgba(255, 107, 157, 0.55));
+}
+.cycle-arrow-group.lit .cycle-marker .cycle-ring {
+  stroke: rgba(255, 107, 157, 0.95);
+  stroke-width: 3;
+  filter: drop-shadow(0 0 10px rgba(255, 107, 157, 0.7));
+}
+.cycle-arrow-group.lit .cycle-marker .cycle-core { fill: #ffe6f0; }
+.cycle-arrow-group.lit .cycle-marker .cycle-num  { fill: #2a0a18; font-weight: 700; }
+.cycle-arrow-group.lit .cycle-caption { color: #fff; font-weight: 600; }
+.cycle-arrow-group.lit .cycle-details { color: rgba(255, 220, 230, 0.95); }
+
+/* Lit state — faint/peripheral brightness for context (dotted) arrows. */
+.cycle-arrow-group.context.lit .cycle-arrow {
+  stroke: rgba(255, 107, 157, 0.55);
+  stroke-width: 2;
+  filter: drop-shadow(0 0 5px rgba(255, 107, 157, 0.3));
+}
+.cycle-arrow-group.context.lit .cycle-marker .cycle-ring {
+  stroke: rgba(255, 107, 157, 0.6);
+  stroke-width: 2.2;
+  filter: drop-shadow(0 0 6px rgba(255, 107, 157, 0.35));
+}
+.cycle-arrow-group.context.lit .cycle-marker .cycle-core { fill: rgba(255, 230, 240, 0.85); }
+.cycle-arrow-group.context.lit .cycle-marker .cycle-num  { fill: #2a0a18; font-weight: 600; }
+
+/* Hover = force-lit (so a paused user can read any arrow in full brightness). */
+.cycle-arrow-group.hover .cycle-arrow {
+  stroke: rgba(255, 107, 157, 0.95);
+  stroke-width: 2.5;
+  filter: drop-shadow(0 0 10px rgba(255, 107, 157, 0.6));
+}
+.cycle-arrow-group.hover .cycle-marker .cycle-ring {
+  stroke: rgba(255, 107, 157, 0.95);
+  stroke-width: 3;
+  filter: drop-shadow(0 0 10px rgba(255, 107, 157, 0.7));
+}
+.cycle-arrow-group.hover .cycle-marker .cycle-core { fill: #ffe6f0; }
+.cycle-arrow-group.hover .cycle-marker .cycle-num  { fill: #2a0a18; font-weight: 700; }
+.cycle-arrow-group.hover .cycle-caption { color: #fff; font-weight: 600; }
+.cycle-arrow-group.hover .cycle-details { color: rgba(255, 220, 230, 0.95); }
+
+/* Ghost label-only node (no card, just text) used for off-scene references. */
+.label-node {
+  fill: rgba(210, 215, 235, 0.7);
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  font-style: italic;
+}
+
+/* ─── L2 scene: arrows + rich boxes ──────────────────────────────────────── */
+.scene-edge {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.55);
+  stroke-width: 1.75;
+}
+.scene-edge.dashed {
+  stroke: rgba(255, 255, 255, 0.4);
+  stroke-dasharray: 6 5;
+}
+.scene-edge.sink {
+  stroke: rgba(255, 255, 255, 0.5);
+  stroke-width: 1.75;
+}
+
+.rich-box text {
+  fill: var(--text);
+  font-family: 'Inter', sans-serif;
+  pointer-events: none;
+  user-select: none;
+}
+
+.rich-box .box-tag {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+}
+.rich-box .box-title {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  fill: #fff;
+}
+.rich-box .box-sublabel {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  fill: rgba(255, 255, 255, 0.5);
+}
+.rich-box .box-divider {
+  stroke: rgba(255, 255, 255, 0.07);
+  stroke-width: 1;
+}
+.rich-box .tool-row-name {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13.5px;
+  fill: rgba(255, 215, 135, 0.95);
+  font-weight: 500;
+}
+
+.op-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.op-list li {
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 2px solid rgba(255, 107, 157, 0.4);
+  margin-bottom: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.op-list li code {
+  font-size: 11.5px;
+  color: #ffd787;
+  background: transparent;
+  padding: 0;
+}
+.op-list li span {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.schema-text {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+  line-height: 1.55;
+  color: #b8b8d0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: hidden;
+  padding-top: 4px;
+}
+
+/* ─── L3 tool cards ────────────────────────────────────────────────────────── */
+.tool-card-body {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  font-family: 'Inter', sans-serif;
+  color: var(--text);
+  overflow: hidden;
+}
+
+.tool-sig {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffd787;
+  margin-bottom: 8px;
+  word-break: break-word;
+}
+
+.tool-brief {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+
+.tool-code {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: #c8c8e0;
+  overflow: auto;
+  white-space: pre;
+  margin-bottom: 8px;
+}
+
+.tool-code .k { color: #ff9dd6; }
+.tool-code .s { color: #ffd787; }
+.tool-code .n { color: #87c9ff; }
+.tool-code .c { color: #6a6a7a; font-style: italic; }
+
+.tool-file {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: #87c9ff;
+  text-decoration: none;
+  padding: 4px 0;
+}
+.tool-file:hover { text-decoration: underline; }
+
+/* ─── INTRO OVERLAY ────────────────────────────────────────────────────────── */
+.intro-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 5, 12, 0.82);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  transition: opacity 240ms ease;
+}
+
+.intro-overlay.hidden { opacity: 0; pointer-events: none; }
+
+.intro-card {
+  background: linear-gradient(180deg, #1a1a2e 0%, #0f0f1e 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 32px 36px;
+  max-width: 520px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+}
+
+.intro-card h2 {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  letter-spacing: -0.01em;
+}
+
+.intro-card ol {
+  list-style: none;
+  padding: 0;
+  margin-bottom: 24px;
+  counter-reset: intro;
+}
+
+.intro-card ol li {
+  padding: 12px 0 12px 40px;
+  position: relative;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  counter-increment: intro;
+}
+
+.intro-card ol li::before {
+  content: counter(intro);
+  position: absolute;
+  left: 0; top: 12px;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ff6b9d 0%, #c06cf2 100%);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.intro-card ol li strong { color: var(--text); font-weight: 600; }
+
+.intro-card button {
+  background: linear-gradient(135deg, #ff6b9d 0%, #c06cf2 100%);
+  border: none;
+  color: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  padding: 10px 24px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+
+.intro-card button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 30px rgba(255, 107, 157, 0.3);
+}
+
+/* ─── RESPONSIVE ──────────────────────────────────────────────────────────── */
+@media (max-width: 960px) {
+  .main {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(400px, 1fr) minmax(0, 40vh);
+  }
+  .explainer { border-left: none; border-top: 1px solid var(--panel-border); }
+  .breadcrumb .crumb { max-width: 140px; font-size: 11px; padding: 4px 10px; }
+  .title-block .subtitle { display: none; }
+}
