@@ -1,10 +1,11 @@
 // Architecture data.
-// Three levels:
-//   L1: data-flow overview with 7 numbered connections (not steps).
-//   L2: zoom into a CONNECTION — shows every operation that travels across it.
-//   L3: the actual tool/function cards with inline code snippets.
+// Two levels on the canvas:
+//   L1: data-flow overview with numbered steps.
+//   L2: zoom into a connection -- cycle arrows show operations; click an arrow to
+//       dim the rest of the scene, read call-level notes, and open the exact
+//       GitHub line for that call site.
 //
-// The LLM is not a module — it's a swappable tool that shows up inside L3 code.
+// The LLM is not a module; it appears as prompts and API calls in the L2 notes.
 
 const REPO_BASE = 'https://github.com/bsurya27/ai-research-curator/blob/main/';
 
@@ -104,6 +105,14 @@ const CURATOR_CYCLE_L2 = {
         'SGD step  |score − 3| × 0.05',
         'L2-normalize  →  unit vector',
       ],
+      deep: {
+        summary:
+          'Each rating dict from signals.txt is pushed into the recommender: URL, score, and source update the live 1536-d preference vector.',
+        tech: 'HTTP to the embedding service; per-signal SGD-style nudge with |score - 3| * 0.05, then L2 normalize server-side.',
+        vars: ['signal["url"]', 'signal["score"]', 'signal["source"]', 'result (dict or error payload)'],
+        callLine: 'update_preference(signal["url"], signal["score"], signal["source"])',
+        source: { file: 'curation_agent/curator.py', line: 256 },
+      },
     },
     {
       id: 'b', stepNum: 3, connection: 2, from: 'embedding', to: 'curator',
@@ -114,6 +123,14 @@ const CURATOR_CYCLE_L2 = {
         'KMeans(6) over embeddings',
         'returns { clusters, weights }',
       ],
+      deep: {
+        summary:
+          'Pulls the current cluster layout over embedded items plus exemplar titles/URLs per centroid, with source mixture weights.',
+        tech: 'HTTP GET to the recommender; k=3 clusters, up to five items shown per cluster for query generation context.',
+        vars: ['clusters_data', 'k', 'top_items', 'cluster_id', 'source_weights'],
+        callLine: 'get_clusters(k=3, top_items=5)',
+        source: { file: 'curation_agent/curator.py', line: 270 },
+      },
     },
     { id: 'x4', stepNum: 4, connection: 4, clickLevel: 'L2',
       from: 'curator', to: 'ext_queries',
@@ -131,6 +148,14 @@ const CURATOR_CYCLE_L2 = {
         "top 15  →  today's picks",
         '(reuses the /score response)',
       ],
+      deep: {
+        summary:
+          'After scraped rows are embedded, this pass scores each dict against the user vector and returns sorted rows for the editorial step.',
+        tech: 'Empty input short-circuits to []; post-filter drops non-positive scores before top_15 selection.',
+        vars: ['all_scraped', 'scored', 'item["score"]'],
+        callLine: 'score_items(all_scraped)',
+        source: { file: 'curation_agent/curator.py', line: 418 },
+      },
     },
   ],
 };
@@ -167,6 +192,14 @@ const SCRAPING_CYCLE_L2 = {
         'scrape_arxiv / scrape_reddit / scrape_twitter',
         'sleep 15s arxiv · 65s twitter',
       ],
+      deep: {
+        summary:
+          'Warm path: Claude turns cluster summaries plus weights into per-source query lists. Cold start swaps in query_generation_cold_start.txt and keyword hints.',
+        tech: 'Then the big for-source loop fans out scrape_arxiv / scrape_reddit / scrape_twitter with rate-limit sleeps and logging per query.',
+        vars: ['generated_queries', 'cold_start', 'clusters_data', 'query_system', 'REDDIT_AVAILABLE_SUBREDDITS'],
+        callLine: '_queries_from_claude(clusters_data, query_system, REDDIT_AVAILABLE_SUBREDDITS)',
+        source: { file: 'curation_agent/curator.py', line: 308 },
+      },
     },
     {
       id: 'b', stepNum: 5, connection: 4, from: 'web', to: 'newitems',
@@ -177,6 +210,14 @@ const SCRAPING_CYCLE_L2 = {
         'title · body · url · date · source',
         'next: embed + score (step 5 → 6)',
       ],
+      deep: {
+        summary:
+          'Scrapers normalize heterogeneous API payloads into one dict schema before dedupe and hand-off to embedding.',
+        tech: 'Representative path: arXiv results become title/body/url/date/author/extra blobs keyed consistently for downstream embed_item.',
+        vars: ['raw vendor dict', 'source string (e.g. "arxiv")'],
+        callLine: 'normalize_item({...}, source="arxiv")',
+        source: { file: 'scraping/arxiv_scraper.py', line: 69 },
+      },
     },
     {
       id: 'ctx3', stepNum: 3, connection: 2, clickLevel: 'L2',
@@ -216,6 +257,14 @@ const BRIEFING_CYCLE_L2 = {
         'write_briefing(content, output_path)',
         'S3 PutObject · or local Path.write_text',
       ],
+      deep: {
+        summary:
+          'Markdown from the curation LLM step is written to briefing.md (or S3) through the shared storage adapter.',
+        tech: 'Top items were assembled earlier; this call persists the final editorial output path from the run configuration.',
+        vars: ['briefing_content', 'BRIEFING_OUTPUT_PATH'],
+        callLine: 'write_briefing(briefing_content, BRIEFING_OUTPUT_PATH)',
+        source: { file: 'curation_agent/curator.py', line: 465 },
+      },
     },
     {
       id: 'ctx6', stepNum: 6, connection: 2, clickLevel: 'L2',
@@ -247,6 +296,14 @@ const SIGNALS_CYCLE_L2 = {
         'score | url | source | ts',
         'returns list[{...}]',
       ],
+      deep: {
+        summary:
+          'First call in run(): loads the pipe-delimited reporter log from local disk or S3 via the same storage adapter.',
+        tech: 'Each valid line becomes a dict with score, url, source, ts; malformed rows are skipped without failing the run.',
+        vars: ['signals (list[dict])', 'SIGNALS_PATH', 'logger'],
+        callLine: 'read_signals(SIGNALS_PATH)',
+        source: { file: 'curation_agent/curator.py', line: 250 },
+      },
     },
     {
       id: 'b', stepNum: '1b', connection: 1, from: 'curator', to: 'signals',
@@ -257,6 +314,14 @@ const SIGNALS_CYCLE_L2 = {
         'fires once at run-end',
         'S3 or local — same adapter',
       ],
+      deep: {
+        summary:
+          'After briefing write and optional SNS notify, the curator truncates signals so the next reporter session starts clean.',
+        tech: 'Uses the shared signals adapter (local truncate or S3 overwrite) once the pipeline completes successfully.',
+        vars: ['SIGNALS_PATH', 'logger'],
+        callLine: 'clear_signals(SIGNALS_PATH)',
+        source: { file: 'curation_agent/curator.py', line: 489 },
+      },
     },
   ],
 };
@@ -285,6 +350,14 @@ const REPORTER_CYCLE_L2 = {
         '_parse_briefing_md()',
         'main_items + also_items → card deck',
       ],
+      deep: {
+        summary:
+          'Streamlit main loads raw markdown, splits mains vs also-worth sections, and seeds shown-item URLs plus fresh star widgets.',
+        tech: 'Hash of raw briefing invalidates session ratings when the file changes behind the running app.',
+        vars: ['raw', 'main_items', 'also_items', 'st.session_state.ratings'],
+        callLine: 'main_items, also_items = _parse_briefing_md(raw or "")',
+        source: { file: 'reporter/app.py', line: 744 },
+      },
     },
     {
       id: 'b', stepNum: 9, connection: 7, from: 'user', to: 'reporter',
@@ -294,6 +367,14 @@ const REPORTER_CYCLE_L2 = {
         'ASK dialog → conversation[]',
         'close session → unrated become score 2',
       ],
+      deep: {
+        summary:
+          'Each star column writes one pipe-delimited line to signals.txt with ISO timestamp; unrated items default on session close.',
+        tech: 'Streamlit reruns after each rating; URL and source come from the parsed briefing card.',
+        vars: ['item["url"]', 'item["source"]', 'score', 'ts'],
+        callLine: '_write_rating_signal(item["url"], item["source"], score)',
+        source: { file: 'reporter/app.py', line: 817 },
+      },
     },
     {
       id: 'c', stepNum: 10, connection: 7, from: 'reporter', to: 'signals',
@@ -303,6 +384,14 @@ const REPORTER_CYCLE_L2 = {
         '_extract_signals() · LLM + URL allow-list',
         'append: score | url | source | ts',
       ],
+      deep: {
+        summary:
+          'Chat save runs Claude over the ASK transcript with URL allow-listing against briefing links; parsed rows batch-append to signals.txt.',
+        tech: 'Star ratings use _write_rating_signal directly; chat path batches lines then calls _append_signals once.',
+        vars: ['msgs', 'briefing', 'written', 'out_lines'],
+        callLine: '_extract_signals(msgs, briefing, logger=logger)',
+        source: { file: 'reporter/app.py', line: 688 },
+      },
     },
   ],
 };
@@ -318,55 +407,6 @@ const CONNECTIONS = [
     hosts: ['signals', 'curator'],
 
     l2: SIGNALS_CYCLE_L2,
-
-    l3: {
-      description: 'Both tools live in the curator\'s thin storage-adapter layer. They transparently branch between local-file and S3 so the rest of the pipeline never sees a path.',
-      tools: [
-        {
-          name: 'read_signals(path)',
-          brief: 'Parse signals.txt into validated signal dicts.',
-          file: 'curation_agent/tools.py',
-          code: `def read_signals(signals_path: str) -> list[dict]:
-    """Read signals.txt, return list of {score, url, source, timestamp}."""
-    if _is_s3():
-        obj = _s3_client().get_object(Bucket=S3_BUCKET, Key="signals.txt")
-        content = obj["Body"].read().decode("utf-8")
-    else:
-        content = Path(signals_path).read_text(encoding="utf-8")
-
-    out = []
-    for line in content.splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        parts = [x.strip() for x in line.split("|")]
-        if len(parts) < 4:
-            continue
-        try:
-            score = float(parts[0])
-        except ValueError:
-            continue
-        out.append({"score": score, "url": parts[1],
-                    "source": parts[2], "timestamp": parts[3]})
-    return out`,
-        },
-        {
-          name: 'clear_signals(path)',
-          brief: 'Truncate signals.txt to empty after the run succeeds.',
-          file: 'curation_agent/tools.py',
-          code: `def clear_signals(signals_path: str) -> None:
-    """Clear signals.txt after processing."""
-    if _is_s3():
-        _s3_client().put_object(
-            Bucket=S3_BUCKET, Key="signals.txt", Body=b""
-        )
-    else:
-        p = Path(signals_path)
-        if p.is_file():
-            p.write_text("", encoding="utf-8")`,
-        },
-      ],
-    },
   },
 
   // ═════ 2 ═════ curator ↔ embedding space ══════════════════════════════════
@@ -378,109 +418,6 @@ const CONNECTIONS = [
     hosts: ['curator', 'embedding'],
 
     l2: CURATOR_CYCLE_L2,
-
-    l3: {
-      description: 'All four client-side tools are thin HTTP wrappers. The real logic lives in the rec_model service — each endpoint has a corresponding Python module that owns one responsibility.',
-      tools: [
-        {
-          name: 'update_preference(url, score, source)',
-          brief: 'POST /update. Server does SGD nudge: step = |score−3| × 0.05.',
-          file: 'curation_agent/tools.py',
-          code: `def update_preference(url, score, source) -> dict:
-    """POST /update to rec model."""
-    r = httpx.post(
-        f"{REC_MODEL_URL}/update",
-        json={"url": url, "source": source, "score": score},
-        timeout=TIMEOUT,
-    )
-    r.raise_for_status()
-    return r.json()`,
-        },
-        {
-          name: 'get_clusters(k, top_items)',
-          brief: 'GET /clusters. Returns k closest clusters with top_items reps each.',
-          file: 'curation_agent/tools.py',
-          code: `def get_clusters(k: int = 3, top_items: int = 5) -> dict:
-    """GET /clusters from rec model."""
-    r = httpx.get(
-        f"{REC_MODEL_URL}/clusters",
-        params={"k": k, "top_items": top_items},
-        timeout=TIMEOUT,
-    )
-    r.raise_for_status()
-    return r.json()`,
-        },
-        {
-          name: 'embed_item(title, body, url, source, date)',
-          brief: 'POST /embed. The write to Chroma is the point — return is ignored.',
-          file: 'curation_agent/tools.py',
-          code: `def embed_item(title, body, url, source, date) -> dict:
-    """POST /embed to rec model."""
-    r = httpx.post(
-        f"{REC_MODEL_URL}/embed",
-        json={"title": title, "body": body, "url": url,
-              "source": source, "date": date},
-        timeout=TIMEOUT,
-    )
-    r.raise_for_status()
-    return r.json()`,
-        },
-        {
-          name: 'score_items(items)',
-          brief: 'POST /score with the whole batch. One OpenAI call, returns sorted DESC.',
-          file: 'curation_agent/tools.py',
-          code: `def score_items(items: list[dict]) -> list[dict]:
-    """POST /score to rec model. Returns sorted by score DESC."""
-    payload = [
-        {"title": i.get("title", ""),
-         "body":  i.get("body", ""),
-         "url":   i.get("url", ""),
-         "source":i.get("source", ""),
-         "date":  str(i.get("date", ""))}
-        for i in items
-    ]
-    r = httpx.post(
-        f"{REC_MODEL_URL}/score",
-        json={"items": payload},
-        timeout=TIMEOUT,
-    )
-    r.raise_for_status()
-    return r.json()["items"]`,
-        },
-        {
-          name: 'preference.update(pref, item, signal)',
-          brief: 'Server-side. SGD step toward item on like, away on dislike, then unit-normalize.',
-          file: 'rec_model/preference.py',
-          code: `def update_preference(current, item_embedding, signal,
-                      step_size=0.1):
-    """Move preference toward (like) or away from (dislike) an item."""
-    item = np.asarray(item_embedding, dtype=np.float64).reshape(-1)
-    cur  = np.asarray(current, dtype=np.float64).reshape(-1)
-    if signal == "like":
-        new = cur + step_size * (item - cur)
-    else:
-        new = cur - step_size * (item - cur)
-    return _unit(new)`,
-        },
-        {
-          name: 'cluster.fit_and_rank(pref, k)',
-          brief: 'Server-side. KMeans(6) over all embeddings, cosine-rank centroids against preference.',
-          file: 'rec_model/cluster.py',
-          code: `km = KMeans(n_clusters=6, n_init=10, random_state=42)
-km.fit(embeddings)
-
-sims = [cosine_similarity(pref, c)
-        for c in km.cluster_centers_]
-top_k = np.argsort(-np.array(sims))[:k]
-
-for c in top_k:
-    members = [e for e, lbl in zip(embeddings, km.labels_)
-               if lbl == c]
-    dists = [np.linalg.norm(e - km.cluster_centers_[c])
-             for e in members]`,
-        },
-      ],
-    },
   },
 
   // ═════ 3 ═════ curator internal reasoning: queries ════════════════════════
@@ -492,54 +429,6 @@ for c in top_k:
     hosts: ['curator'],
 
     l2: SCRAPING_CYCLE_L2,
-
-    l3: {
-      description: 'The LLM client is a dependency — swap the model name and provider at the top of curator.py. The prompt file is the real contract.',
-      tools: [
-        {
-          name: '_queries_from_claude(clusters, prompt)',
-          brief: 'Send cluster JSON to the LLM. Retry on overload. Return parsed queries JSON.',
-          file: 'curation_agent/curator.py',
-          code: `def _queries_from_claude(clusters_data, system_prompt, ...):
-    payload = {
-        "clusters": clusters_data.get("clusters", []),
-        "source_weights": clusters_data.get("source_weights", {}),
-        "reddit_available_subreddits": reddit_subreddit_catalog,
-    }
-    user_text = json.dumps(payload, indent=2) + _QUERY_JSON_INSTRUCTIONS
-
-    client = anthropic.Anthropic(api_key=...)
-    for attempt in range(3):
-        try:
-            msg = client.messages.create(
-                model=ANTHROPIC_MODEL,
-                max_tokens=4096,
-                system=system_prompt,
-                messages=[{"role": "user", "content": user_text}],
-            )
-            break
-        except Exception as e:
-            if "529" in str(e):
-                time.sleep(2 ** attempt * 5)
-                continue
-            raise
-    return _parse_json_object(msg.content[0].text)`,
-        },
-        {
-          name: '_is_cold_start()',
-          brief: 'If item_count < 50, use the cold-start prompt driven by onboarding keywords.',
-          file: 'curation_agent/curator.py',
-          code: `def _is_cold_start() -> bool:
-    try:
-        health = httpx.get(
-            f"{REC_MODEL_URL}/health", timeout=10.0
-        ).json()
-        return int(health.get("item_count", 0)) < 50
-    except Exception:
-        return False`,
-        },
-      ],
-    },
   },
 
   // ═════ 4 ═════ curator ↔ scraping ═════════════════════════════════════════
@@ -551,63 +440,6 @@ for c in top_k:
     hosts: ['curator', 'scraping'],
 
     l2: SCRAPING_CYCLE_L2,
-
-    l3: {
-      description: 'The curator\'s tools.py exposes thin wrappers over each source module. The actual Apify polling, rate-limit handling, and schema normalization all live in scraping/.',
-      tools: [
-        {
-          name: 'scrape_arxiv(query)',
-          brief: 'Overfetch by 3× then trim to days_back for recency. Abstract becomes body.',
-          file: 'curation_agent/tools.py',
-          code: `def scrape_arxiv(query: str,
-                 max_results: int = 25,
-                 days_back: int = 7) -> list[dict]:
-    """Wrapper around search_arxiv."""
-    return search_arxiv(query,
-                        max_results=max_results,
-                        days_back=days_back)`,
-        },
-        {
-          name: 'scrape_reddit(subreddits)',
-          brief: 'Apify actor on a subreddit listing. Polls until SUCCEEDED or TIMED_OUT.',
-          file: 'curation_agent/tools.py',
-          code: `def scrape_reddit(subreddits: list[str],
-                  max_results: int = 20,
-                  days_back: int = 1) -> list[dict]:
-    """Wrapper around scrape_subreddits."""
-    return scrape_subreddits(
-        subreddits=subreddits,
-        max_results=max_results,
-        days_back=days_back,
-    )`,
-        },
-        {
-          name: 'scrape_twitter(query)',
-          brief: 'Apify altimis/scweet actor, Latest sort. Tweet first 80 chars → title.',
-          file: 'curation_agent/tools.py',
-          code: `def scrape_twitter(query: str,
-                   max_results: int = 25,
-                   days_back: int = 4) -> list[dict]:
-    """Wrapper around search_twitter."""
-    return search_twitter(query,
-                          max_results=max_results,
-                          days_back=days_back)`,
-        },
-        {
-          name: 'normalize_item(raw, source)',
-          brief: 'The schema enforcer. Every scraper pipes through this.',
-          file: 'scraping/utils.py',
-          code: `SCHEMA_KEYS = ("title", "body", "url", "date",
-               "author", "source", "extra")
-
-def normalize_item(raw: dict, source: str) -> dict:
-    out = {k: raw.get(k, "") for k in SCHEMA_KEYS}
-    out["source"] = source
-    out["extra"]  = raw.get("extra", {})
-    return out`,
-        },
-      ],
-    },
   },
 
   // ═════ 5 ═════ curator → briefing.md (reasoning + write) ══════════════════
@@ -619,55 +451,6 @@ def normalize_item(raw: dict, source: str) -> dict:
     hosts: ['curator', 'briefing'],
 
     l2: BRIEFING_CYCLE_L2,
-
-    l3: {
-      description: 'Two tools in sequence — the LLM produces the markdown, then write_briefing handles the local/S3 persistence.',
-      tools: [
-        {
-          name: '_briefing_from_claude(top_15, prompt)',
-          brief: 'Hand top-15 to the LLM with the curation_and_writing prompt. Return markdown string.',
-          file: 'curation_agent/curator.py',
-          code: `def _briefing_from_claude(top_15, system_prompt) -> str:
-    user_text = (
-        "Items JSON:\\n"
-        + json.dumps({"items": top_15}, indent=2)
-        + "\\n\\nWrite a markdown briefing for the reader. "
-        + "Use headings and links where appropriate."
-    )
-    client = anthropic.Anthropic(api_key=...)
-    for attempt in range(3):
-        try:
-            msg = client.messages.create(
-                model=ANTHROPIC_MODEL,
-                max_tokens=8192,
-                system=system_prompt,
-                messages=[{"role": "user", "content": user_text}],
-            )
-            break
-        except Exception as e:
-            if "529" in str(e):
-                time.sleep(2 ** attempt * 5); continue
-            raise
-    return msg.content[0].text`,
-        },
-        {
-          name: 'write_briefing(content, output_path)',
-          brief: 'Persist markdown. S3 → PutObject; local → Path.write_text (mkdir parents).',
-          file: 'curation_agent/tools.py',
-          code: `def write_briefing(content: str, output_path: str) -> None:
-    """Save briefing markdown to output_path."""
-    if _is_s3():
-        _s3_client().put_object(
-            Bucket=S3_BUCKET, Key="briefing.md",
-            Body=content.encode("utf-8"),
-        )
-    else:
-        p = Path(output_path)
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(content, encoding="utf-8")`,
-        },
-      ],
-    },
   },
 
   // ═════ 6 ═════ briefing.md → reporter ═════════════════════════════════════
@@ -679,45 +462,6 @@ def normalize_item(raw: dict, source: str) -> dict:
     hosts: ['briefing', 'reporter'],
 
     l2: REPORTER_CYCLE_L2,
-
-    l3: {
-      description: 'Parsing is regex-based and strict — which is why the writing prompt on the curator side locks the output structure.',
-      tools: [
-        {
-          name: '_read_briefing_raw()',
-          brief: 'Fetch briefing.md from local or S3. Returns None if missing.',
-          file: 'reporter/app.py',
-          code: `def _read_briefing_raw() -> str | None:
-    if _is_s3():
-        try:
-            obj = _s3_client().get_object(
-                Bucket=S3_BUCKET, Key="briefing.md"
-            )
-            return obj["Body"].read().decode("utf-8")
-        except Exception:
-            return None
-    p = Path(BRIEFING_PATH)
-    return p.read_text(encoding="utf-8") if p.is_file() else None`,
-        },
-        {
-          name: '_parse_briefing_md(md)',
-          brief: 'Split on "Also worth a look"; regex-extract ### headings and bullet links.',
-          file: 'reporter/app.py',
-          code: `_HEADING  = re.compile(r"^###\\s+\\[([^\\]]+)\\]\\((https?://[^\\)]+)\\)\\s*$")
-_TAG_LINE = re.compile(r"^\\s*\\[(reddit|arxiv|twitter|devto)\\]\\s*$", re.I)
-
-def _parse_briefing_md(md: str) -> tuple[list[dict], list[dict]]:
-    parts = re.split(r"^##\\s+also worth a look.*$",
-                     md, flags=re.I | re.M, maxsplit=1)
-    main_md = parts[0]
-    also_md = parts[1] if len(parts) > 1 else ""
-
-    main_items = _parse_main_items(main_md)
-    also_items = _parse_also_items(also_md)
-    return main_items, also_items`,
-        },
-      ],
-    },
   },
 
   // ═════ 7 ═════ reporter ↔ user ↔ signals.txt ══════════════════════════════
@@ -729,84 +473,6 @@ def _parse_briefing_md(md: str) -> tuple[list[dict], list[dict]]:
     hosts: ['user', 'reporter', 'signals'],
 
     l2: REPORTER_CYCLE_L2,
-
-    l3: {
-      description: 'Five tools cooperate. Three are trivial wrappers; two do real work: _extract_signals (LLM + URL validation) and _parse_briefing_md (regex).',
-      tools: [
-        {
-          name: '_write_rating_signal(url, source, score)',
-          brief: 'Append a single pipe-delimited rating line on every star click.',
-          file: 'reporter/app.py',
-          code: `def _write_rating_signal(url, source, score) -> None:
-    ts = datetime.utcnow().isoformat() + "Z"
-    line = f"{score} | {url} | {source} | {ts}\\n"
-    _append_signals([line])`,
-        },
-        {
-          name: '_append_signals(lines)',
-          brief: 'Append a batch to signals.txt. S3-aware: read, concat, PutObject.',
-          file: 'reporter/app.py',
-          code: `def _append_signals(lines: list[str]) -> None:
-    if not lines:
-        return
-    text = "".join(lines)
-    if _is_s3():
-        try:
-            obj = _s3_client().get_object(
-                Bucket=S3_BUCKET, Key="signals.txt"
-            )
-            existing = obj["Body"].read().decode("utf-8")
-        except Exception:
-            existing = ""
-        _s3_client().put_object(
-            Bucket=S3_BUCKET, Key="signals.txt",
-            Body=(existing + text).encode("utf-8"),
-        )
-    else:
-        with open(SIGNALS_PATH, "a", encoding="utf-8") as f:
-            f.write(text)`,
-        },
-        {
-          name: '_extract_signals(messages, briefing, logger)',
-          brief: 'Send chat + briefing to LLM, parse pipe-delimited response, drop neutrals + hallucinated URLs, append.',
-          file: 'reporter/app.py',
-          code: `def _extract_signals(messages, briefing_content, logger):
-    briefing_urls = _urls_from_briefing(briefing_content)
-    convo = _format_conversation(messages)
-    resp = client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        system=SIGNAL_EXTRACTION_PROMPT,
-        messages=[{"role": "user",
-                   "content": f"{briefing_content}\\n\\n{convo}"}],
-    )
-    out_lines = []
-    for line in resp.content[0].text.splitlines():
-        parts = [p.strip() for p in line.split("|")]
-        if len(parts) < 4:
-            continue
-        score, url, source, ts = parts[:4]
-        if float(score) == 3.0:
-            continue
-        if not _url_allowed(url, briefing_urls):
-            continue
-        out_lines.append(f"{score} | {url} | {source} | {ts}\\n")
-    _append_signals(out_lines)`,
-        },
-        {
-          name: '_urls_from_briefing(text)',
-          brief: 'Allow-list of URLs from the current briefing. Blocks LLM-hallucinated links.',
-          file: 'reporter/app.py',
-          code: `def _urls_from_briefing(text: str) -> set[str]:
-    urls = set()
-    for match in re.finditer(r"\\((https?://[^\\)]+)\\)", text):
-        urls.add(match.group(1).strip())
-    return urls
-
-def _url_allowed(url: str, briefing_urls: set[str]) -> bool:
-    return url.strip() in briefing_urls`,
-        },
-      ],
-    },
   },
 
 ];

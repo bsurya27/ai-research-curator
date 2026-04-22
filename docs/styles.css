@@ -598,6 +598,32 @@ body {
 .cycle-arrow-group.hover .cycle-caption { color: #fff; font-weight: 600; }
 .cycle-arrow-group.hover .cycle-details { color: rgba(255, 220, 230, 0.95); }
 
+/* L2 arrow focus: dim everything except the selected connection leg */
+.scene.l2-dim .cycle-nodes .node { opacity: 0.34; }
+.scene.l2-dim .cycle-arrow-group.dimmed { opacity: 0.22; }
+.scene.l2-dim .cycle-arrow-group.dimmed .cycle-caption,
+.scene.l2-dim .cycle-arrow-group.dimmed .cycle-details { opacity: 0.5; }
+.scene.l2-dim .cycle-arrow-group.focused { opacity: 1; }
+.scene.l2-dim .cycle-arrow-group.focused .cycle-caption,
+.scene.l2-dim .cycle-arrow-group.focused .cycle-details { opacity: 1; }
+
+.panel-hint {
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.45);
+  margin: 0.5rem 0 1rem;
+}
+.panel-tech { color: rgba(255, 255, 255, 0.55); font-size: 0.92rem; line-height: 1.45; }
+.panel-call code {
+  font-size: 0.88rem;
+  color: rgba(255, 220, 230, 0.95);
+}
+.var-list { margin: 0.25rem 0 0.75rem; padding-left: 1.1rem; }
+.var-list code { font-size: 0.82rem; color: rgba(200, 210, 255, 0.9); }
+.call-site-link {
+  color: #7ec8ff;
+  font-weight: 500;
+}
+
 /* Ghost label-only node (no card, just text) used for off-scene references. */
 .label-node {
   fill: rgba(210, 215, 235, 0.7);

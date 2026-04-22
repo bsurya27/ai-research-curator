@@ -1,7 +1,7 @@
-// Three-level architecture viz.
-//   L1: data-flow overview with 7 numbered connection-markers (with brief labels).
-//   L2: zoom into a connection — stacked parallel arrows with tool-name labels.
-//   L3: tool-function cards with inline code snippets.
+// Two-level architecture viz.
+//   L1: data-flow overview with numbered steps.
+//   L2: zoom into a connection; cycle arrows are clickable for dimmed focus,
+//       technical notes, and a GitHub link to the exact call site (line anchor).
 // Canvas supports pan (drag) and zoom (wheel) via d3.zoom.
 
 (function () {
@@ -109,9 +109,24 @@
   resetBtn.addEventListener('click', resetView);
 
   // ─── STATE / NAV ─────────────────────────────────────────────────────────
-  const state = { level: 'L1', number: null };
+  const state = { level: 'L1', number: null, focusId: null };
 
   function getConn(n) { return CONNECTIONS.find(c => c.number === n); }
+
+  /** Next/prev connection (1-based), wrapping 7→1 and skipping entries that share the same l2 scene object. */
+  function adjacentL2Connection(fromNum, delta) {
+    const len = CONNECTIONS.length;
+    if (len < 1 || fromNum == null) return null;
+    const cur = getConn(fromNum);
+    if (!cur) return null;
+    const startL2 = cur.l2;
+    let n = fromNum;
+    for (let i = 0; i < len; i++) {
+      n = ((n - 1 + delta + len) % len) + 1;
+      if (getConn(n).l2 !== startL2) return n;
+    }
+    return null;
+  }
 
   // JS-driven chase for L2 cycle scenes — single setInterval ticks a `.lit`
   // class across the arrow groups so every element (arrow, ring, num, caption,
@@ -124,8 +139,62 @@
     }
   }
 
+  function githubLineUrl(relPath, line) {
+    const base = REPO_BASE.endsWith('/') ? REPO_BASE : `${REPO_BASE}/`;
+    return `${base}${relPath}#L${line}`;
+  }
+
+  function refreshL2Dimming() {
+    sceneRoot.classed('l2-dim', !!state.focusId);
+    sceneRoot.selectAll('.cycle-arrow-group').each(function () {
+      const g = d3.select(this);
+      const id = g.attr('data-arrow-id');
+      g.classed('dimmed', !!state.focusId && id !== state.focusId)
+        .classed('focused', !!state.focusId && id === state.focusId);
+    });
+  }
+
+  function startCycleChaseFromDom() {
+    clearCycleChase();
+    if (state.level !== 'L2' || state.focusId) return;
+    const c = getConn(state.number);
+    if (!c || !c.l2 || c.l2.type !== 'cycle') return;
+    const nodes = sceneRoot.selectAll('.cycle-arrow-group').nodes();
+    if (!nodes.length) return;
+    const PER_STEP_MS = 1000;
+    let active = 0;
+    const tick = () => {
+      nodes.forEach((node, i) => { d3.select(node).classed('lit', i === active); });
+      active = (active + 1) % nodes.length;
+    };
+    tick();
+    cycleTimerId = setInterval(tick, PER_STEP_MS);
+  }
+
+  function clearL2Focus() {
+    if (!state.focusId) return;
+    state.focusId = null;
+    refreshL2Dimming();
+    updatePanel();
+    startCycleChaseFromDom();
+  }
+
+  function setL2Focus(arrowId) {
+    state.focusId = arrowId;
+    clearCycleChase();
+    sceneRoot.selectAll('.cycle-arrow-group').classed('lit', false);
+    refreshL2Dimming();
+    updatePanel();
+  }
+
+  sceneRoot.on('click.l2clear', (event) => {
+    if (state.level !== 'L2' || !state.focusId) return;
+    if (event.target === sceneRoot.node()) clearL2Focus();
+  });
+
   function goTo(level, number) {
     clearCycleChase();
+    state.focusId = null;
 
     // Fade-out then clear then redraw
     const prev = sceneRoot.selectAll('*');
@@ -138,7 +207,6 @@
       sceneRoot.attr('opacity', 0);
       if (level === 'L1') renderL1();
       else if (level === 'L2') renderL2(getConn(number));
-      else if (level === 'L3') renderL3(getConn(number));
       sceneRoot.transition().duration(240).attr('opacity', 1);
       resetView();
     }, 180);
@@ -167,13 +235,7 @@
       sep();
       const c = getConn(state.number);
       const crumb = (c.l2 && c.l2.type === 'cycle') ? c.l2.title : c.title;
-      add(crumb,
-          state.level === 'L3' ? () => goTo('L2', state.number) : null,
-          state.level === 'L2');
-    }
-    if (state.level === 'L3') {
-      sep();
-      add('Tools & code', null, true);
+      add(crumb, null, state.level === 'L2');
     }
   }
 
@@ -201,28 +263,58 @@
     } else if (state.level === 'L2') {
       const c = getConn(state.number);
       const scene = c.l2;
+      const prevN = adjacentL2Connection(c.number, -1);
+      const nextN = adjacentL2Connection(c.number, 1);
+      const l2NavHtml = (prevN != null || nextN != null)
+        ? `<h3>Navigate</h3>
+          <div class="step-nav">
+            ${prevN != null ? `<button class="nav-btn" onclick="window.__goL2(${prevN})">← ${prevN}</button>` : '<span></span>'}
+            ${nextN != null ? `<button class="nav-btn" onclick="window.__goL2(${nextN})">${nextN} →</button>` : '<span></span>'}
+          </div>`
+        : '';
       if (scene.type === 'cycle') {
-        const arrowsHtml = scene.arrows
-          .filter(a => !a.context && a.caption)
-          .map(a => `
-          <li data-conn="${a.connection}">
-            <span class="step-num">${a.stepNum}</span>
-            <span>
-              <strong>${escapeHtml(a.caption)}</strong>
-              <span class="step-sum">${(a.details || []).map(escapeHtml).join(' · ')}</span>
-            </span>
-          </li>
-        `).join('');
-        panel.innerHTML = `
-          <div class="kicker">${escapeHtml(scene.kicker || 'L2')}</div>
-          <h2>${escapeHtml(scene.title)}</h2>
-          <p>${escapeHtml(scene.description)}</p>
-          <h3>What crosses each arrow</h3>
-          <ul class="step-list">${arrowsHtml}</ul>
-        `;
-        panel.querySelectorAll('.step-list li').forEach(li => {
-          li.onclick = () => goTo('L3', +li.dataset.conn);
-        });
+        const focused = state.focusId
+          ? scene.arrows.find(a => a.id === state.focusId && a.deep)
+          : null;
+        if (focused) {
+          const d = focused.deep;
+          const href = githubLineUrl(d.source.file, d.source.line);
+          const varsList = (d.vars || []).map(v => `<li><code>${escapeHtml(v)}</code></li>`).join('');
+          panel.innerHTML = `
+            <div class="kicker">Focused step</div>
+            <h2>${escapeHtml(focused.caption)}</h2>
+            <p>${escapeHtml(d.summary)}</p>
+            ${d.tech ? `<p class="panel-tech">${escapeHtml(d.tech)}</p>` : ''}
+            <h3>Call</h3>
+            <p class="panel-call"><code>${escapeHtml(d.callLine)}</code></p>
+            ${varsList ? `<h3>Names in scope</h3><ul class="var-list">${varsList}</ul>` : ''}
+            <p><a class="call-site-link" href="${href}" target="_blank" rel="noopener">View this call on GitHub (${escapeHtml(d.source.file)} line ${d.source.line})</a></p>
+            <p><button type="button" class="nav-btn" id="clear-arrow-focus">Clear focus</button></p>
+            ${l2NavHtml}
+          `;
+          panel.querySelector('#clear-arrow-focus').onclick = () => clearL2Focus();
+        } else {
+          const arrowsHtml = scene.arrows
+            .filter(a => !a.context && a.caption)
+            .map(a => `
+            <li>
+              <span class="step-num">${a.stepNum}</span>
+              <span>
+                <strong>${escapeHtml(a.caption)}</strong>
+                <span class="step-sum">${(a.details || []).map(escapeHtml).join(' · ')}</span>
+              </span>
+            </li>
+          `).join('');
+          panel.innerHTML = `
+            <div class="kicker">${escapeHtml(scene.kicker || 'L2')}</div>
+            <h2>${escapeHtml(scene.title)}</h2>
+            <p>${escapeHtml(scene.description)}</p>
+            <p class="panel-hint">Click an arrow on the canvas to dim the rest, see call-level detail, and open the exact line in GitHub.</p>
+            <h3>What crosses each arrow</h3>
+            <ul class="step-list">${arrowsHtml}</ul>
+            ${l2NavHtml}
+          `;
+        }
       } else {
         const opsLines = (scene.operations || []).map(op =>
           `<li><code>${escapeHtml(op.tool)}</code><span>${escapeHtml(op.label || '')}${op.endpoint ? ' · ' + escapeHtml(op.endpoint) : ''}</span></li>`
@@ -233,40 +325,13 @@
           <p>${escapeHtml(scene.description)}</p>
           ${scene.annotation ? `<div class="annotation">${escapeHtml(scene.annotation)}</div>` : ''}
           ${opsLines ? `<h3>Operations on this connection</h3><ul class="op-list">${opsLines}</ul>` : ''}
-          <div class="zoom-deeper">
-            <button onclick="window.__goL3(${c.number})">See the tools &amp; code →</button>
-          </div>
-          <h3>Navigate</h3>
-          <div class="step-nav">
-            ${c.number > 1 ? `<button class="nav-btn" onclick="window.__goL2(${c.number - 1})">← ${c.number - 1}</button>` : '<span></span>'}
-            ${c.number < CONNECTIONS.length ? `<button class="nav-btn" onclick="window.__goL2(${c.number + 1})">${c.number + 1} →</button>` : ''}
-          </div>
+          ${l2NavHtml}
         `;
       }
-    } else if (state.level === 'L3') {
-      const c = getConn(state.number);
-      panel.innerHTML = `
-        <div class="kicker">L3 · Tools &amp; code</div>
-        <h2>${escapeHtml(c.title)}</h2>
-        <p>${escapeHtml(c.l3.description)}</p>
-        <h3>Tool inventory</h3>
-        <ul class="tool-list">
-          ${c.l3.tools.map(t => `
-            <li>
-              <code>${escapeHtml(t.name)}</code>
-              <span>${escapeHtml(t.brief)}</span>
-              <a href="${REPO_BASE}${t.file}" target="_blank" rel="noopener">${escapeHtml(t.file)} ↗</a>
-            </li>`).join('')}
-        </ul>
-        <div class="zoom-deeper">
-          <button onclick="window.__goL2(${c.number})">← Back to the connection</button>
-        </div>
-      `;
     }
   }
 
   window.__goL2 = (n) => goTo('L2', n);
-  window.__goL3 = (n) => goTo('L3', n);
 
   const CAT_LABEL = {
     agent: 'AGENT', service: 'SERVICE', external: 'EXTERNAL',
@@ -612,7 +677,7 @@
       .attr('fill', '#fff').attr('font-size', 24).attr('font-weight', 600)
       .text(title);
 
-    if (scene.type === 'cycle')          renderCycleScene(scene);
+    if (scene.type === 'cycle')          renderCycleScene(scene, conn);
     else if (scene.type === 'reasoning') renderReasoningScene(scene);
     else                                 renderConnectionScene(scene);
   }
@@ -622,7 +687,7 @@
   // briefing → user → reporter → signals.txt). Arrows carry a plain-language
   // caption plus a stack of tool/var details, and the whole chase cycles.
 
-  function renderCycleScene(scene) {
+  function renderCycleScene(scene, _conn) {
     const gNodes  = sceneRoot.append('g').attr('class', 'cycle-nodes');
     const gArrows = sceneRoot.append('g').attr('class', 'cycle-arrows');
 
@@ -637,23 +702,16 @@
       else                           renderDefaultNode(g, n);
     });
 
-    // One group per arrow — chase driver just toggles `.lit` on them in order.
-    const groups = scene.arrows.map(a => {
+    scene.arrows.forEach(a => {
       const from = nodeById.get(a.from);
       const to   = nodeById.get(a.to);
-      return drawCycleArrow(gArrows, from, to, a);
+      drawCycleArrow(gArrows, from, to, a);
     });
 
-    if (groups.length === 0) return;
+    if (!scene.arrows.length) return;
 
-    const PER_STEP_MS = 1000;
-    let active = 0;
-    const tick = () => {
-      groups.forEach((g, i) => g.classed('lit', i === active));
-      active = (active + 1) % groups.length;
-    };
-    tick();
-    cycleTimerId = setInterval(tick, PER_STEP_MS);
+    if (state.focusId) refreshL2Dimming();
+    else startCycleChaseFromDom();
   }
 
   function renderLabelNode(g, n) {
@@ -691,11 +749,20 @@
     const dxOff = (a.labelOffset && a.labelOffset.dx) || 0;
     const dyOff = (a.labelOffset && a.labelOffset.dy) || 0;
 
-    const clickLvl = a.clickLevel || 'L3';
     const g = parent.append('g')
       .attr('class', 'cycle-arrow-group' + (a.context ? ' context' : ''))
-      .style('cursor', 'pointer')
-      .on('click', () => goTo(clickLvl, a.connection))
+      .attr('data-arrow-id', a.id)
+      .style('cursor', (a.context || a.deep) ? 'pointer' : 'default')
+      .on('click', (event) => {
+        event.stopPropagation();
+        if (a.context) {
+          goTo('L2', a.connection);
+          return;
+        }
+        if (!a.deep) return;
+        if (state.focusId === a.id) clearL2Focus();
+        else setL2Focus(a.id);
+      })
       .on('mouseover', function () { d3.select(this).classed('hover', true); })
       .on('mouseout',  function () { d3.select(this).classed('hover', false); });
 
@@ -1196,73 +1263,6 @@
     }
   }
 
-  // ─── L3: tool cards ──────────────────────────────────────────────────────
-  function renderL3(conn) {
-    const banner = sceneRoot.append('g').attr('transform', `translate(${VBW / 2}, 48)`);
-    banner.append('text').attr('text-anchor', 'middle')
-      .attr('fill', 'rgba(255, 255, 255, 0.4)')
-      .attr('font-size', 11).attr('letter-spacing', '0.18em')
-      .text(`CONNECTION ${conn.number} · TOOLS & CODE`);
-    banner.append('text').attr('text-anchor', 'middle').attr('y', 26)
-      .attr('fill', '#fff').attr('font-size', 24).attr('font-weight', 600)
-      .text(conn.title);
-
-    const tools = conn.l3.tools;
-    const cols = Math.min(3, tools.length <= 2 ? tools.length : tools.length === 3 ? 3 : 2);
-    const cardW = cols === 1 ? 900 : cols === 2 ? 680 : 460;
-    const cardGap = 28;
-    const rowGap = 26;
-
-    const cards = tools.map(t => {
-      const lines = t.code.split('\n').length;
-      return { ...t, h: Math.max(220, 150 + lines * 18) };
-    });
-
-    const totalW = cols * cardW + (cols - 1) * cardGap;
-    const startX = (VBW - totalW) / 2;
-    const startY = 110;
-
-    const rowHeights = [];
-    for (let i = 0; i < cards.length; i += cols) {
-      const row = cards.slice(i, i + cols);
-      rowHeights.push(Math.max(...row.map(c => c.h)));
-    }
-
-    const gCards = sceneRoot.append('g').attr('class', 'tool-cards');
-    cards.forEach((t, i) => {
-      const row = Math.floor(i / cols);
-      const col = i % cols;
-      const yOff = rowHeights.slice(0, row).reduce((a, b) => a + b + rowGap, 0);
-      const x = startX + col * (cardW + cardGap);
-      const y = startY + yOff;
-      renderToolCard(gCards, t, x, y, cardW, rowHeights[row]);
-    });
-  }
-
-  function renderToolCard(parent, t, x, y, w, h) {
-    const g = parent.append('g').attr('class', 'tool-card')
-      .attr('transform', `translate(${x}, ${y})`);
-    g.append('rect')
-      .attr('width', w).attr('height', h).attr('rx', 12)
-      .attr('fill', 'rgba(14, 14, 26, 0.9)')
-      .attr('stroke', 'rgba(255, 255, 255, 0.08)')
-      .attr('stroke-width', 1);
-    g.append('rect').attr('width', 4).attr('height', h).attr('rx', 2)
-      .attr('fill', `url(#grad-agent)`);
-    const fo = g.append('foreignObject')
-      .attr('x', 20).attr('y', 16)
-      .attr('width', w - 32).attr('height', h - 24);
-    const div = document.createElement('div');
-    div.className = 'tool-card-body';
-    div.innerHTML = `
-      <div class="tool-sig">${escapeHtml(t.name)}</div>
-      <div class="tool-brief">${escapeHtml(t.brief)}</div>
-      <pre class="tool-code">${highlightPython(t.code)}</pre>
-      <a class="tool-file" href="${REPO_BASE}${t.file}" target="_blank" rel="noopener">${escapeHtml(t.file)} ↗</a>
-    `;
-    fo.node().appendChild(div);
-  }
-
   // ─── GEOMETRY ────────────────────────────────────────────────────────────
   function boundaryPoint(node, angle) {
     const halfW = node.w / 2 + 2, halfH = node.h / 2 + 2;
@@ -1278,26 +1278,6 @@
     return String(s).replace(/[&<>"']/g, c => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
     }[c]));
-  }
-
-  function highlightPython(code) {
-    const kw = ['def', 'for', 'in', 'if', 'else', 'elif', 'try', 'except', 'return',
-                'import', 'from', 'as', 'with', 'not', 'and', 'or', 'is',
-                'None', 'True', 'False', 'lambda', 'while', 'break', 'continue',
-                'pass', 'raise', 'yield'];
-    const kwRe = `\\b(?:${kw.join('|')})\\b`;
-    const pattern = new RegExp(
-      `(#[^\n]*)` + `|("[^"\\n]*"|'[^'\\n]*')` +
-      `|(${kwRe})` + `|(\\b\\d+\\.?\\d*\\b)`, 'g');
-    let out = '', last = 0, m;
-    while ((m = pattern.exec(code)) !== null) {
-      if (m.index > last) out += escapeHtml(code.slice(last, m.index));
-      const cls = m[1] ? 'c' : m[2] ? 's' : m[3] ? 'k' : 'n';
-      out += `<span class="${cls}">${escapeHtml(m[0])}</span>`;
-      last = m.index + m[0].length;
-    }
-    if (last < code.length) out += escapeHtml(code.slice(last));
-    return out;
   }
 
   // ─── INTRO OVERLAY ───────────────────────────────────────────────────────
@@ -1316,12 +1296,20 @@
   // ─── KEYBOARD ────────────────────────────────────────────────────────────
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-      if (state.level === 'L3') goTo('L2', state.number);
+      if (state.level === 'L2' && state.focusId) clearL2Focus();
       else if (state.level === 'L2') goTo('L1');
     } else if (e.key === 'ArrowRight' && state.level === 'L2') {
-      if (state.number < CONNECTIONS.length) goTo('L2', state.number + 1);
+      const next = adjacentL2Connection(state.number, 1);
+      if (next != null) {
+        e.preventDefault();
+        goTo('L2', next);
+      }
     } else if (e.key === 'ArrowLeft' && state.level === 'L2') {
-      if (state.number > 1) goTo('L2', state.number - 1);
+      const prev = adjacentL2Connection(state.number, -1);
+      if (prev != null) {
+        e.preventDefault();
+        goTo('L2', prev);
+      }
     } else if (e.key === '0') {
       resetView();
     }
@@ -1329,9 +1317,9 @@
 
   // ─── BOOT ────────────────────────────────────────────────────────────────
   // Optional deep-link via URL hash (useful for dev/testing):
-  //   #L1, #L2-<n>, #L3-<n>
+  //   #L1, #L2-<n>
   function routeFromHash() {
-    const m = /^#L([123])(?:-(\d+))?$/.exec(location.hash);
+    const m = /^#L([12])(?:-(\d+))?$/.exec(location.hash);
     if (!m) return false;
     const lvl = 'L' + m[1];
     const num = m[2] ? +m[2] : 1;
