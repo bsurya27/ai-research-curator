@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Research Curator — Architecture</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="top-bar">
+    <div class="title-block">
+      <h1>AI Research Curator</h1>
+      <p class="subtitle">Architecture &amp; data flow</p>
+    </div>
+    <nav class="breadcrumb" id="breadcrumb"></nav>
+    <div class="actions">
+      <a class="repo-link" href="https://github.com/bsurya27/ai-research-curator" target="_blank" rel="noopener">GitHub ↗</a>
+    </div>
+  </header>
+
+  <main class="main">
+    <div class="canvas-wrap">
+      <svg id="canvas"></svg>
+      <div class="canvas-controls">
+        <button id="reset-view" title="Reset view (0)">⟲ reset view</button>
+      </div>
+      <div class="legend"><span class="hint">Click a number to zoom · drag to pan · scroll to zoom · Esc back · ← → navigate</span></div>
+    </div>
+    <aside class="explainer">
+      <div id="panel-content" class="panel-content"></div>
+    </aside>
+  </main>
+
+  <div class="intro-overlay" id="intro-overlay">
+    <div class="intro-card">
+      <h2>How this works</h2>
+      <ol>
+        <li><strong>L1 — The daily loop.</strong> The ten numbered actions that make up one revolution. A chase highlight walks through them in order so the flow reads like a story.</li>
+        <li><strong>L2 — Inside a connection.</strong> Click any numbered step. You'll see the two modules involved and every tool call that passes between them, stacked as parallel arrows.</li>
+        <li><strong>Arrow focus.</strong> On L2, click any main arrow: the rest of the scene dims, the side panel shows call-level detail, and you get a GitHub link to the exact line of that call in the repo.</li>
+        <li><strong>Drag to pan, scroll to zoom.</strong> The canvas is pan-and-zoomable so nothing is cut off.</li>
+      </ol>
+      <button id="intro-dismiss">Got it</button>
+    </div>
+  </div>
+
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
