@@ -129,8 +129,8 @@
   }
 
   // JS-driven chase for L2 cycle scenes — single setInterval ticks a `.lit`
-  // class across the arrow groups so every element (arrow, ring, num, caption,
-  // details) flips state on the exact same frame.
+  // class across the arrow groups so every element (arrow, ring, num, caption)
+  // flips state on the exact same frame.
   let cycleTimerId = null;
   function clearCycleChase() {
     if (cycleTimerId !== null) {
@@ -301,7 +301,6 @@
               <span class="step-num">${a.stepNum}</span>
               <span>
                 <strong>${escapeHtml(a.caption)}</strong>
-                <span class="step-sum">${(a.details || []).map(escapeHtml).join(' · ')}</span>
               </span>
             </li>
           `).join('');
@@ -685,7 +684,7 @@
   // ─── L2: cycle scene ─────────────────────────────────────────────────────
   // A shared L2 view that spans multiple L1 steps (e.g. the reporter cycle:
   // briefing → user → reporter → signals.txt). Arrows carry a plain-language
-  // caption plus a stack of tool/var details, and the whole chase cycles.
+  // caption; the whole chase cycles.
 
   function renderCycleScene(scene, _conn) {
     const gNodes  = sceneRoot.append('g').attr('class', 'cycle-nodes');
@@ -779,22 +778,18 @@
       .attr('text-anchor', 'middle').attr('dominant-baseline', 'central')
       .text(a.stepNum);
 
-    // Caption + details placement by side
-    let capX, capY, detX, detY, capCls = '', detCls = '';
+    // Caption placement by side (plain language only; no API/tool sublines)
+    let capX, capY, capCls = '';
     if (side === 'above') {
       capX = mx - CAP_W / 2 + dxOff; capY = my - 82 + dyOff;
-      detX = capX;                   detY = my + 28 + dyOff;
     } else if (side === 'below') {
       capX = mx - CAP_W / 2 + dxOff; capY = my + 28 + dyOff;
-      detX = capX;                   detY = my + 78 + dyOff;
     } else if (side === 'right') {
       capX = mx + 34 + dxOff;        capY = my - 44 + dyOff;
-      detX = capX;                   detY = my + 8  + dyOff;
-      capCls = ' side-right'; detCls = ' side-right';
+      capCls = ' side-right';
     } else { // 'left' (default for vertical)
       capX = mx - CAP_W - 34 + dxOff; capY = my - 44 + dyOff;
-      detX = capX;                    detY = my + 8  + dyOff;
-      capCls = ' side'; detCls = ' side';
+      capCls = ' side';
     }
 
     const bgCls = a.labelBg ? ' with-bg' : '';
@@ -805,14 +800,6 @@
       capFO.append('xhtml:div')
         .attr('class', 'cycle-caption' + capCls + bgCls)
         .html(escapeHtml(a.caption));
-    }
-    if (a.details && a.details.length) {
-      const detFO = g.append('foreignObject')
-        .attr('x', detX).attr('y', detY)
-        .attr('width', CAP_W).attr('height', 110);
-      detFO.append('xhtml:div')
-        .attr('class', 'cycle-details' + detCls + bgCls)
-        .html(a.details.map(d => `<div class="cycle-detail">${escapeHtml(d)}</div>`).join(''));
     }
 
     return g;
