@@ -267,7 +267,7 @@ def run() -> None:
         )
 
     # Step 3 — Get clusters
-    clusters_data = get_clusters(k=3, top_items=5)
+    clusters_data = get_clusters(k=5, top_items=5)
     logger.log(
         "clusters_retrieved",
         {
@@ -400,22 +400,39 @@ def run() -> None:
                 logger.log("scrape_error", {"source": source, "query": query, "error": str(e)})
 
     # Step 6 — Embed all scraped items
+    embed_results: dict[str, dict] = {}
     for item in all_scraped:
         try:
-            embed_item(
+            result = embed_item(
                 item.get("title", ""),
                 item.get("body", ""),
                 item.get("url", ""),
                 item.get("source", ""),
                 str(item.get("date", "")),
             )
+            embed_results[item.get("url", "")] = result
         except Exception as e:
             logger.log("embed_error", {"url": item.get("url"), "error": str(e)})
+            embed_results[item.get("url", "")] = {"embedded": False}
+
+    new_items = [
+        i
+        for i in all_scraped
+        if embed_results.get(i.get("url", ""), {}).get("embedded") is True
+    ]
+    logger.log(
+        "embed_summary",
+        {
+            "total_scraped": len(all_scraped),
+            "newly_embedded": len(new_items),
+            "skipped_duplicates": len(all_scraped) - len(new_items),
+        },
+    )
 
     all_scraped = deduplicate(all_scraped)
 
     # Step 7 — Score
-    scored = score_items(all_scraped) if all_scraped else []
+    scored = score_items(new_items) if new_items else []
     logger.log(
         "scored",
         {
