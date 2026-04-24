@@ -267,7 +267,7 @@ def run() -> None:
         )
 
     # Step 3 — Get clusters
-    clusters_data = get_clusters(k=5, top_items=5)
+    clusters_data = get_clusters(k=10, top_items=3)
     logger.log(
         "clusters_retrieved",
         {
