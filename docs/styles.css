@@ -112,6 +112,139 @@ body {
   min-height: 0;
 }
 
+/* L0: one column, no side panel, canvas area scrolls (story + diagram) */
+.main.l0,
+body[data-viz-level="L0"] #main {
+  grid-template-columns: 1fr;
+}
+
+.main.l0 .explainer,
+body[data-viz-level="L0"] #explainer-aside {
+  display: none !important;
+}
+
+.main.l0 .canvas-wrap,
+body[data-viz-level="L0"] #canvas-wrap {
+  border-right: none;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: block;
+  padding: 12px 16px 32px;
+}
+
+.main.l0 .legend,
+body[data-viz-level="L0"] .main .legend {
+  position: relative;
+  left: auto;
+  bottom: auto;
+  transform: none;
+  margin: 20px auto 0;
+  padding: 0 12px;
+  max-width: 42rem;
+  white-space: normal;
+  line-height: 1.45;
+}
+
+/* No card chrome — title, story, and diagram read as one column with the page */
+.l0-view {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 8px 0 28px;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.l0-title {
+  font-size: clamp(1.35rem, 2.4vw, 1.85rem);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  text-align: center;
+  line-height: 1.25;
+  margin: 0 0 20px;
+  color: #f2f2f8;
+}
+
+.l0-story {
+  color: rgba(228, 228, 238, 0.92);
+  font-size: 15px;
+  line-height: 1.82;
+  text-align: left;
+  max-width: 58ch;
+  margin: 0 auto 24px;
+}
+
+.l0-figure {
+  width: 100%;
+  max-width: 920px;
+  margin: 0 auto 6px;
+}
+
+/* Explicit height so #canvas height:100% resolves */
+.l0-diagram-host {
+  width: 100%;
+  height: clamp(380px, 52vh, 540px);
+  min-height: 380px;
+  max-height: 560px;
+  position: relative;
+  border-radius: 0;
+  overflow: hidden;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.l0-diagram-host #canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.l0-foot {
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-dim);
+  margin: 20px auto 18px;
+  max-width: 48ch;
+  line-height: 1.5;
+}
+
+.l0-cta {
+  display: block;
+  margin: 0 auto 4px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  color: #fff;
+  background: linear-gradient(135deg, rgba(192, 108, 242, 0.35), rgba(0, 212, 255, 0.2));
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  padding: 13px 32px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+}
+
+.l0-cta:hover {
+  border-color: rgba(255, 255, 255, 0.38);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35), 0 0 28px rgba(192, 108, 242, 0.2);
+  transform: translateY(-1px);
+}
+
+@media (max-width: 640px) {
+  .l0-view {
+    padding: 4px 0 24px;
+  }
+
+  .l0-diagram-host {
+    min-height: 320px;
+    height: clamp(320px, 48vh, 440px);
+  }
+}
+
 .canvas-wrap {
   position: relative;
   overflow: hidden;
@@ -478,6 +611,17 @@ body {
   stroke: rgba(255, 107, 157, 0.95);
   stroke-width: 2.5;
   filter: drop-shadow(0 0 10px rgba(255, 107, 157, 0.6));
+}
+
+/* L0 overview arrows — same weight as L1 arrows, no step chase */
+.l0-flow-arrow {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.2);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+.l0-flow-arrow.l0-warm {
+  stroke: rgba(255, 200, 155, 0.32);
 }
 
 /* ─── L2 cycle scene ──────────────────────────────────────────────────────── */

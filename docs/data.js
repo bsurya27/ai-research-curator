@@ -1,5 +1,6 @@
 // Architecture data.
-// Two levels on the canvas:
+// Levels on the canvas:
+//   L0: story + tiny triad (edit copy in L0 at bottom of this file).
 //   L1: data-flow overview with numbered steps.
 //   L2: zoom into a connection -- cycle arrows show operations; click an arrow to
 //       dim the rest of the scene, read call-level notes, and open the exact
@@ -480,4 +481,17 @@ const CONNECTIONS = [
 const L1_OVERVIEW = {
   title: 'The daily loop',
   paragraph: 'One revolution of the system, told end-to-end. The curator reads yesterday\'s review, updates its idea of what the user likes, scrapes fresh items from the web, ranks them, and hands the top picks to the reporter as a briefing. The user reads the briefing, reacts, and the reporter writes a new review — which the curator will read tomorrow. Click any numbered step to see how it works under the hood.',
+};
+
+// ─── L0: birds-eye story (edit copy here) ─────────────────────────────────
+const L0 = {
+  title: 'AI information curator, with preference learning',
+  story:
+    "I built a small multi-agent system to break a familiar creative block: the feeling that I'm either doom-scrolling for inspiration or stalling in front of a blank page. I wanted a loop where I could keep taking in what genuinely interests me while staying on-topic for my work — not random tips, and not another endless feed. The curation side learns, loosely, what I pay attention to and what I star away; the reporter side turns the day's shortlist into something I can read in a few minutes. My expectation is modest but concrete: I show up, skim a briefing, react, and the next run is a little more aligned with how I actually think — not a second job to operate.",
+  calloutCA:
+    "Chooses and ranks from what you might read next — pulling from the web, clustering it, and steering toward the topics you have been caring about.",
+  calloutRA:
+    "Takes the ranked list and turns it into a short, readable daily briefing, then records how you respond so tomorrow's pass can be tuned.",
+  cta: 'Open the detailed architecture',
+  footnote: 'Arrows are data flow in plain language, not a code-level call list.',
 };

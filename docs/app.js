@@ -1,4 +1,5 @@
-// Two-level architecture viz.
+// Three-level flow:
+//   L0: short story + birds-eye diagram (CA, RA, you, briefing).
 //   L1: data-flow overview with numbered steps.
 //   L2: zoom into a connection; cycle arrows are clickable for dimmed focus,
 //       technical notes, and a GitHub link to the exact call site (line anchor).
@@ -6,9 +7,17 @@
 
 (function () {
   const svg = d3.select('#canvas');
+  const mainEl = document.getElementById('main');
+  const canvasWrap = document.getElementById('canvas-wrap');
+  const l0View = document.getElementById('l0-view');
+  const l0DiagramHost = document.getElementById('l0-diagram-host');
   const panel = document.getElementById('panel-content');
   const breadcrumb = document.getElementById('breadcrumb');
   const resetBtn = document.getElementById('reset-view');
+  const ctaL0 = document.getElementById('l0-cta');
+  const elLegendL0 = document.getElementById('legend-l0');
+  const elLegendL1 = document.getElementById('legend-l1');
+  const canvasNode = svg.node();
 
   const VBW = 1600;
   const VBH = 900;
@@ -109,7 +118,7 @@
   resetBtn.addEventListener('click', resetView);
 
   // ─── STATE / NAV ─────────────────────────────────────────────────────────
-  const state = { level: 'L1', number: null, focusId: null };
+  const state = { level: 'L0', number: null, focusId: null };
 
   function getConn(n) { return CONNECTIONS.find(c => c.number === n); }
 
@@ -192,6 +201,44 @@
     if (event.target === sceneRoot.node()) clearL2Focus();
   });
 
+  function setHashForState() {
+    const h = state.level === 'L0' ? '#L0'
+      : state.level === 'L1' ? '#L1'
+      : '#L2-' + state.number;
+    if (location.hash !== h) {
+      try { history.replaceState(null, '', h); } catch (e) { /* e.g. file:// */ }
+    }
+  }
+
+  function fillL0Copy() {
+    if (typeof L0 === 'undefined' || !L0) return;
+    document.getElementById('l0-title').textContent = L0.title;
+    document.getElementById('l0-story').textContent = L0.story;
+    document.getElementById('l0-foot').textContent = L0.footnote;
+    ctaL0.textContent = L0.cta;
+    ctaL0.onclick = () => goTo('L1');
+  }
+
+  function syncLayoutToLevel() {
+    document.body.dataset.vizLevel = state.level;
+    if (state.level === 'L0') {
+      mainEl.classList.add('l0');
+      fillL0Copy();
+      l0View.removeAttribute('hidden');
+      l0DiagramHost.appendChild(canvasNode);
+    } else {
+      mainEl.classList.remove('l0');
+      l0View.setAttribute('hidden', '');
+      const controls = canvasWrap.querySelector('.canvas-controls');
+      if (canvasNode.parentNode !== canvasWrap) {
+        canvasWrap.insertBefore(canvasNode, controls);
+      }
+    }
+    const is0 = state.level === 'L0';
+    if (elLegendL0) elLegendL0.hidden = !is0;
+    if (elLegendL1) elLegendL1.hidden = is0;
+  }
+
   function goTo(level, number) {
     clearCycleChase();
     state.focusId = null;
@@ -203,16 +250,20 @@
     state.level = level;
     state.number = number ?? null;
 
+    syncLayoutToLevel();
+
     setTimeout(() => {
       sceneRoot.attr('opacity', 0);
-      if (level === 'L1') renderL1();
-      else if (level === 'L2') renderL2(getConn(number));
+      if (state.level === 'L0') renderL0();
+      else if (state.level === 'L1') renderL1();
+      else if (state.level === 'L2') renderL2(getConn(state.number));
       sceneRoot.transition().duration(240).attr('opacity', 1);
       resetView();
     }, 180);
 
     updateBreadcrumb();
     updatePanel();
+    setHashForState();
   }
 
   function updateBreadcrumb() {
@@ -230,16 +281,22 @@
       breadcrumb.appendChild(s);
     };
 
+    add('Intro', () => goTo('L0'), state.level === 'L0');
+    sep();
     add('Overview', () => goTo('L1'), state.level === 'L1');
-    if (state.level !== 'L1') {
+    if (state.level === 'L2') {
       sep();
       const c = getConn(state.number);
       const crumb = (c.l2 && c.l2.type === 'cycle') ? c.l2.title : c.title;
-      add(crumb, null, state.level === 'L2');
+      add(crumb, null, true);
     }
   }
 
   function updatePanel() {
+    if (state.level === 'L0') {
+      panel.innerHTML = '';
+      return;
+    }
     if (state.level === 'L1') {
       panel.innerHTML = `
         <div class="kicker">L1 · The daily loop</div>
@@ -410,6 +467,138 @@
       .text('ℝ¹⁵³⁶');
 
     return g;
+  }
+
+  // ─── L0: sketch layout — you + briefing center, CA / RA sides, notes beside agents
+  function l0WrapLines(str, maxLen) {
+    const words = String(str).split(/\s+/);
+    const lines = [];
+    let cur = '';
+    words.forEach((w) => {
+      const next = cur ? `${cur} ${w}` : w;
+      if (next.length <= maxLen) cur = next;
+      else {
+        if (cur) lines.push(cur);
+        cur = w;
+      }
+    });
+    if (cur) lines.push(cur);
+    return lines.slice(0, 7);
+  }
+
+  function l0DrawCallout(parent, x, y, w, lines, accent) {
+    const pad = 11;
+    const lh = 14;
+    const hh = Math.max(86, lines.length * lh + pad * 2 + 4);
+    const g = parent.append('g').attr('class', 'l0-floating-note');
+    g.append('rect')
+      .attr('x', x).attr('y', y).attr('width', w).attr('height', hh)
+      .attr('rx', 10).attr('ry', 10)
+      .attr('fill', 'rgba(12, 12, 26, 0.94)')
+      .attr('stroke', accent)
+      .attr('stroke-width', 1.2);
+    lines.forEach((line, i) => {
+      g.append('text')
+        .attr('x', x + pad)
+        .attr('y', y + pad + 11 + i * lh)
+        .attr('fill', 'rgba(220, 222, 240, 0.95)')
+        .attr('font-size', 11)
+        .attr('font-family', 'Inter, system-ui, sans-serif')
+        .text(line);
+    });
+  }
+
+  function l0EdgeStrokeText(gg, x, y, text) {
+    gg.append('text')
+      .attr('x', x).attr('y', y)
+      .attr('text-anchor', 'middle')
+      .attr('fill', 'rgba(232, 234, 248, 0.92)')
+      .attr('font-size', 10.5)
+      .attr('stroke', 'rgba(4, 4, 14, 0.9)')
+      .attr('stroke-width', 3)
+      .attr('paint-order', 'stroke')
+      .text(text);
+  }
+
+  /** L0 positions only; w/h/labels/shapes/categories come from L1_NODES so visuals stay in sync with L1/L2. */
+  function l0NodeFromL1(id, cx, cy) {
+    const n = L1_NODES.find(nn => nn.id === id);
+    if (!n) return null;
+    return { ...n, x: cx, y: cy };
+  }
+
+  function renderL0() {
+    const g0 = sceneRoot.append('g').attr('class', 'l0-scene');
+    if (typeof L0 === 'undefined' || !L0) return;
+
+    // Hub layout: user at circle center; briefing + both agents on the ring at 120°.
+    const hubX = 800;
+    const hubY = 430;
+    const ringR = 248;
+    const rad = (deg) => (deg * Math.PI) / 180;
+    const ringPos = (deg) => ({
+      x: hubX + ringR * Math.cos(rad(deg)),
+      y: hubY + ringR * Math.sin(rad(deg)),
+    });
+
+    const briefing = l0NodeFromL1('briefing', ringPos(-90).x, ringPos(-90).y);
+    const curator = l0NodeFromL1('curator', ringPos(150).x, ringPos(150).y);
+    const reporter = l0NodeFromL1('reporter', ringPos(30).x, ringPos(30).y);
+    const user = l0NodeFromL1('user', hubX, hubY);
+
+    const caLines = l0WrapLines(L0.calloutCA, 32);
+    const raLines = l0WrapLines(L0.calloutRA, 32);
+
+    g0.append('circle')
+      .attr('class', 'l0-hub-ring')
+      .attr('cx', hubX).attr('cy', hubY).attr('r', 92)
+      .attr('fill', 'none')
+      .attr('stroke', 'rgba(255, 255, 255, 0.07)')
+      .attr('stroke-width', 1.2);
+
+    // Reporter → curation: bulge *down* (negative offset — positive offset bends up
+    // through the hub and reads as duplicate / “residual” strokes over other arrows).
+    const arcOver = stepPath(reporter, curator, -280);
+    g0.append('path')
+      .attr('class', 'l0-flow-arrow')
+      .attr('d', arcOver.d)
+      .attr('marker-end', 'url(#arrow)');
+    l0EdgeStrokeText(g0, 800, 668, 'How you reacted gets sent back');
+
+    const caToBr = stepPath(curator, briefing, 0);
+    g0.append('path')
+      .attr('class', 'l0-flow-arrow')
+      .attr('d', caToBr.d)
+      .attr('marker-end', 'url(#arrow)');
+    l0EdgeStrokeText(g0, 668, 348, 'into briefing');
+
+    const brToRa = stepPath(briefing, reporter, 0);
+    g0.append('path')
+      .attr('class', 'l0-flow-arrow')
+      .attr('d', brToRa.d)
+      .attr('marker-end', 'url(#arrow)');
+    l0EdgeStrokeText(g0, 932, 348, 'review');
+
+    const brToUser = stepPath(briefing, user, 0);
+    g0.append('path')
+      .attr('class', 'l0-flow-arrow l0-warm')
+      .attr('d', brToUser.d)
+      .attr('marker-end', 'url(#arrow)');
+    l0EdgeStrokeText(g0, 828, 308, 'read');
+
+    const gNodes = g0.append('g').attr('class', 'nodes-layer');
+    [curator, reporter, briefing, user].forEach((n) => {
+      const g = gNodes.append('g')
+        .datum(n)
+        .attr('class', 'node')
+        .attr('transform', `translate(${n.x - n.w / 2}, ${n.y - n.h / 2})`);
+      if (n.shape === 'pages') renderPagesNode(g, n);
+      else if (n.shape === 'person') renderPersonNode(g, n);
+      else renderDefaultNode(g, n);
+    });
+
+    l0DrawCallout(g0, 268, 468, 200, caLines, 'rgba(255, 120, 170, 0.55)');
+    l0DrawCallout(g0, 1132, 468, 200, raLines, 'rgba(90, 200, 255, 0.55)');
   }
 
   // ─── L1 ──────────────────────────────────────────────────────────────────
@@ -1303,16 +1492,16 @@
   });
 
   // ─── BOOT ────────────────────────────────────────────────────────────────
-  // Optional deep-link via URL hash (useful for dev/testing):
-  //   #L1, #L2-<n>
+  // Deep-link via hash: #L0, #L1, #L2-<n>
   function routeFromHash() {
-    const m = /^#L([12])(?:-(\d+))?$/.exec(location.hash);
+    const m = /^#L(0|1|2)(?:-(\d+))?$/.exec(location.hash);
     if (!m) return false;
-    const lvl = 'L' + m[1];
+    if (m[1] === '0') { goTo('L0'); return true; }
+    if (m[1] === '1') { goTo('L1'); return true; }
     const num = m[2] ? +m[2] : 1;
-    goTo(lvl, num);
+    goTo('L2', num);
     return true;
   }
-  if (!routeFromHash()) goTo('L1');
+  if (!routeFromHash()) goTo('L0');
   window.addEventListener('hashchange', routeFromHash);
 })();
