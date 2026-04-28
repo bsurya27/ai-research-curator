@@ -119,6 +119,7 @@
 
   // ─── STATE / NAV ─────────────────────────────────────────────────────────
   const state = { level: 'L0', number: null, focusId: null };
+  let navSeq = 0;
 
   function getConn(n) { return CONNECTIONS.find(c => c.number === n); }
 
@@ -240,6 +241,9 @@
   }
 
   function goTo(level, number) {
+    navSeq++;
+    const mySeq = navSeq;
+
     clearCycleChase();
     state.focusId = null;
 
@@ -253,6 +257,7 @@
     syncLayoutToLevel();
 
     setTimeout(() => {
+      if (mySeq !== navSeq) return;
       sceneRoot.attr('opacity', 0);
       if (state.level === 'L0') renderL0();
       else if (state.level === 'L1') renderL1();
@@ -510,6 +515,7 @@
 
   function l0EdgeStrokeText(gg, x, y, text) {
     gg.append('text')
+      .attr('class', 'l0-edge-label')
       .attr('x', x).attr('y', y)
       .attr('text-anchor', 'middle')
       .attr('fill', 'rgba(232, 234, 248, 0.92)')
