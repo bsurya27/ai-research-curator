@@ -27,21 +27,6 @@ from rec_model.preference import (
 
 load_dotenv()
 
-KEYWORDS = [
-    "Large Language Models",
-    "Agentic AI Systems",
-    "RAG and Retrieval Augmented Generation",
-    "Vision Language Models",
-    "Efficient Fine-tuning LoRA PEFT",
-    "ML Infrastructure and Deployment",
-    "Multimodal AI",
-    "AI Safety and Alignment",
-    "Robotics and Embodied AI",
-    "ML Research and Benchmarks",
-    "Open Source Models",
-    "AI Products and Industry",
-]
-
 
 def _save_cold_start_json(keywords: list[str]) -> None:
     payload = {
@@ -63,21 +48,56 @@ def _save_cold_start_json(keywords: list[str]) -> None:
 
 def main() -> None:
     st.title("Welcome — Let's set up your research curator")
-    st.subheader("Pick 3-5 topics you care about most")
 
-    selected: list[str] = []
-    for i, kw in enumerate(KEYWORDS):
-        if st.checkbox(kw, key=f"kw_{i}"):
-            selected.append(kw)
+    if "topics" not in st.session_state:
+        st.session_state.topics = []
 
-    n = len(selected)
-    ok = 3 <= n <= 5
+    st.caption("Add topics you care about — at least one. No upper limit.")
+
+    with st.form("add_topic"):
+        inp = st.text_input(
+            "Topic",
+            label_visibility="collapsed",
+            placeholder="e.g. mechanistic interpretability, RAG pipelines, embodied AI…",
+            key="topic_input_field",
+        )
+        add_clicked = st.form_submit_button("Add")
+
+    if add_clicked:
+        topic = inp.strip()
+        if topic:
+            if topic not in st.session_state.topics:
+                st.session_state.topics.append(topic)
+                st.rerun()
+            else:
+                st.warning("That topic is already in your list.")
+
+    rows = []
+    cols_per = 4
+    for idx, topic in enumerate(st.session_state.topics):
+        rows.append({"idx": idx, "topic": topic})
+    for i in range(0, len(rows), cols_per):
+        chunk = rows[i : i + cols_per]
+        rcols = st.columns(len(chunk))
+        for j, meta in enumerate(chunk):
+            tid = meta["idx"]
+            ttxt = meta["topic"]
+            with rcols[j]:
+                c_label, c_x = st.columns([5, 1])
+                with c_label:
+                    st.markdown(ttxt)
+                with c_x:
+                    if st.button("×", key=f"remove_topic_{tid}"):
+                        st.session_state.topics.pop(tid)
+                        st.rerun()
+
+    ok = len(st.session_state.topics) >= 1
     if st.button("Initialize", disabled=not ok):
-        vectors = embed_batch(selected)
+        vectors = embed_batch(st.session_state.topics)
         mean = np.mean(np.array(vectors, dtype=np.float64), axis=0)
         pref = _unit(mean)
         save_preference(pref)
-        _save_cold_start_json(selected)
+        _save_cold_start_json(st.session_state.topics)
         st.success(
             "Done! Your curator is ready. Run the curator to get your first briefing."
         )

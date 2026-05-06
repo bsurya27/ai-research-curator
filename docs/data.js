@@ -191,9 +191,9 @@ const CURATOR_CYCLE_L2 = {
   nodes: [
     { id: 'embedding', label: 'Embedding Space',
       sublabel: 'preference vector · KMeans clusters · item store',
-      category: 'service', x: 370, y: 500, w: 440, h: 280 },
+      category: 'service', x: 370, y: 500, w: 440, h: 320 },
     { id: 'curator',   label: 'Curation Agent', category: 'agent',
-      x: 1180, y: 500, w: 300, h: 280 },
+      x: 1180, y: 500, w: 300, h: 320 },
     { id: 'ext_queries', shape: 'label', label: 'scraping queries  ⑥',
       category: 'external', x: 1180, y: 150, w: 240, h: 50 },
     { id: 'ext_items',   shape: 'label', label: 'new scraped items  ⑦',
@@ -202,7 +202,7 @@ const CURATOR_CYCLE_L2 = {
   arrows: [
     {
       id: 'a', stepNum: 4, connection: 1, from: 'curator', to: 'embedding',
-      offset: 130, labelSide: 'above',
+      offset: 150, labelSide: 'below',
       caption: "Nudges the preference vector toward yesterday's liked items.",
       deep: {
         summary: 'Each rating dict is pushed into the recommender: URL, score, and source update the live 1536-d preference vector.',
@@ -214,7 +214,7 @@ const CURATOR_CYCLE_L2 = {
     },
     {
       id: 'b', stepNum: 5, connection: 2, from: 'embedding', to: 'curator',
-      offset: 0, labelSide: 'above', labelW: 240,
+      offset: 0, labelSide: 'below', labelW: 240,
       caption: 'Samples nearest cluster centroids.',
       deep: {
         summary: 'Pulls the current cluster layout over embedded items plus exemplar titles/URLs per centroid.',
@@ -230,7 +230,7 @@ const CURATOR_CYCLE_L2 = {
       from: 'ext_items', to: 'embedding', context: true, dashed: true },
     {
       id: 'd', stepNum: 8, connection: 8, from: 'embedding', to: 'curator',
-      offset: 130, labelSide: 'below',
+      offset: 150, labelSide: 'below',
       caption: "Returns the top-ranked items back to the curator.",
       deep: {
         summary: 'After scraped rows are embedded, this pass scores each dict against the user vector and returns sorted rows.',
@@ -253,7 +253,7 @@ const SCRAPING_CYCLE_L2 = {
     "The curator takes its freshly-sampled clusters, reasons a query plan, and fans those queries out through the web scraper. Every returned item lands in a normalized schema, ready to be embedded and scored.",
   nodes: [
     { id: 'newitems', label: "Today's new items", shape: 'pages', category: 'data',
-      x: 320, y: 200, w: 240, h: 140 },
+      x: 320, y: 170, w: 240, h: 130 },
     { id: 'web', label: 'Web Scraper', sublabel: 'powered by Exa search',
       category: 'external', x: 1280, y: 170, w: 220, h: 130 },
     { id: 'curator', label: 'Curation Agent', category: 'agent',

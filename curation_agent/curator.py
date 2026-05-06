@@ -26,11 +26,8 @@ from tools import (
     embed_item,
     get_clusters,
     read_signals,
+    run_search,
     score_items,
-    scrape_arxiv,
-    scrape_reddit,
-    scrape_twitter,
-    search_reddit_query,
     update_preference,
     write_briefing,
 )
@@ -41,29 +38,8 @@ load_dotenv()
 BASE = Path(__file__).resolve().parent
 SIGNALS_PATH = str(BASE / "data" / "signals.txt")
 BRIEFING_OUTPUT_PATH = str(BASE / "data" / "briefing.md")
-REDDIT_SUBREDDITS = ["MachineLearning", "LocalLLaMA", "artificial"]
-REDDIT_AVAILABLE_SUBREDDITS = [
-    "MachineLearning",
-    "LocalLLaMA",
-    "artificial",
-    "singularity",
-    "ChatGPT",
-    "mlops",
-    "deeplearning",
-    "LanguageModeling",
-]
 ANTHROPIC_MODEL = "claude-sonnet-4-20250514"
-
-_QUERY_JSON_INSTRUCTIONS = (
-    "\n\nRespond with a single JSON object only, with keys arxiv, reddit, twitter.\n"
-    "- arxiv: array of non-empty search query strings.\n"
-    "- twitter: array of non-empty search query strings.\n"
-    "- reddit: either (1) an array of query strings for keyword search only "
-    "(default subreddit listing will be used), or (2) an object "
-    '{"subreddits": ["name1", ...], "queries": ["keyword1", ...]} '
-    "where subreddits are chosen only from reddit_available_subreddits in the context, "
-    "and queries are keyword searches on Reddit."
-)
+EXPLORATION_BUDGET = 3
 
 
 def _is_cold_start() -> bool:
@@ -87,60 +63,67 @@ def _load_cold_start_keywords() -> list[str]:
     return []
 
 
-def _parse_json_object(text: str) -> dict:
+def _parse_queries_json(text: str) -> list[Any]:
     text = text.strip()
     m = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
     if m:
         text = m.group(1).strip()
-    start = text.find("{")
-    end = text.rfind("}")
+    start = text.find("[")
+    end = text.rfind("]")
     if start >= 0 and end > start:
         return json.loads(text[start : end + 1])
     return json.loads(text)
 
 
-def _normalize_reddit_queries_value(v: Any) -> dict[str, Any]:
-    """Old format: list of query strings. New format: {subreddits, queries}."""
-    if isinstance(v, list):
-        return {
-            "subreddits": None,
-            "queries": [str(x).strip() for x in v if str(x).strip()],
-        }
-    if isinstance(v, dict):
-        subs = v.get("subreddits")
-        qs = v.get("queries")
-        out_subs: list[str] | None = None
-        if isinstance(subs, list):
-            out_subs = [str(x).strip() for x in subs if str(x).strip()]
-        elif isinstance(subs, str) and subs.strip():
-            out_subs = [subs.strip()]
-        out_qs: list[str] = []
-        if isinstance(qs, list):
-            out_qs = [str(x).strip() for x in qs if str(x).strip()]
-        return {"subreddits": out_subs, "queries": out_qs}
-    if isinstance(v, str) and v.strip():
-        return {"subreddits": None, "queries": [v.strip()]}
-    return {"subreddits": None, "queries": []}
+def _normalize_query_entries(rows: Any) -> list[dict]:
+    out: list[dict] = []
+    if not isinstance(rows, list):
+        return out
+    for x in rows:
+        if not isinstance(x, dict):
+            continue
+        q = str(x.get("query") or "").strip()
+        if not q:
+            continue
+        raw_dom = x.get("domains")
+        if raw_dom is None:
+            domains: list[str] | None = None
+        elif isinstance(raw_dom, list):
+            lst = [str(d).strip() for d in raw_dom if str(d).strip()]
+            domains = lst if lst else None
+        elif isinstance(raw_dom, str) and raw_dom.strip():
+            domains = [raw_dom.strip()]
+        else:
+            domains = None
+        source_label = str(x.get("source") or "").strip()
+        out.append({"query": q, "domains": domains, "source": source_label})
+    return out
 
 
 def _queries_from_claude(
-    clusters_data: dict,
+    *,
+    cold_start: bool,
+    clusters_data: dict | None,
+    user_interests: list[str],
     system_prompt: str,
-    reddit_subreddit_catalog: list[str],
-) -> dict[str, Any]:
+) -> list[dict]:
     import anthropic
 
-    payload = {
-        "clusters": clusters_data.get("clusters", []),
-        "source_weights": clusters_data.get("source_weights", {}),
-        "message": clusters_data.get("message"),
-        "reddit_available_subreddits": reddit_subreddit_catalog,
-    }
-    user_text = (
-        "Context JSON:\n"
-        + json.dumps(payload, indent=2, ensure_ascii=False)
-        + _QUERY_JSON_INSTRUCTIONS
-    )
+    if cold_start:
+        payload = {
+            "user_interests": user_interests,
+            "exploration_budget": EXPLORATION_BUDGET,
+        }
+    else:
+        cd = clusters_data or {}
+        payload = {
+            "clusters": cd.get("clusters", []),
+            "source_weights": cd.get("source_weights", {}),
+            "message": cd.get("message"),
+            "exploration_budget": EXPLORATION_BUDGET,
+        }
+    user_text = "Context JSON:\n" + json.dumps(payload, indent=2, ensure_ascii=False)
+
     client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", "").strip() or None)
     max_retries = 3
     for attempt in range(max_retries):
@@ -155,61 +138,13 @@ def _queries_from_claude(
         except Exception as e:
             if "529" in str(e) or "overloaded" in str(e).lower():
                 if attempt < max_retries - 1:
-                    wait = 2**attempt * 5  # 5s, 10s, 20s
+                    wait = 2**attempt * 5
                     time.sleep(wait)
                     continue
             raise
     raw = msg.content[0].text
-    data = _parse_json_object(raw)
-    out: dict[str, Any] = {}
-    for key in ("arxiv", "twitter"):
-        v = data.get(key, [])
-        if isinstance(v, str):
-            out[key] = [v] if v.strip() else []
-        elif isinstance(v, list):
-            out[key] = [str(x).strip() for x in v if str(x).strip()]
-        else:
-            out[key] = []
-    out["reddit"] = _normalize_reddit_queries_value(data.get("reddit", []))
-    return out
-
-
-def _queries_from_claude_cold_start(
-    keywords: list[str],
-    system_prompt: str,
-    reddit_subreddit_catalog: list[str],
-) -> dict[str, Any]:
-    import anthropic
-
-    payload = {
-        "user_interests": keywords,
-        "reddit_available_subreddits": reddit_subreddit_catalog,
-    }
-    user_text = (
-        "Context JSON:\n"
-        + json.dumps(payload, indent=2, ensure_ascii=False)
-        + _QUERY_JSON_INSTRUCTIONS
-    )
-    client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", "").strip() or None)
-    msg = client.messages.create(
-        model=ANTHROPIC_MODEL,
-        max_tokens=4096,
-        system=system_prompt or "You are a helpful assistant.",
-        messages=[{"role": "user", "content": user_text}],
-    )
-    raw = msg.content[0].text
-    data = _parse_json_object(raw)
-    out: dict[str, Any] = {}
-    for key in ("arxiv", "twitter"):
-        v = data.get(key, [])
-        if isinstance(v, str):
-            out[key] = [v] if v.strip() else []
-        elif isinstance(v, list):
-            out[key] = [str(x).strip() for x in v if str(x).strip()]
-        else:
-            out[key] = []
-    out["reddit"] = _normalize_reddit_queries_value(data.get("reddit", []))
-    return out
+    data = _parse_queries_json(raw)
+    return _normalize_query_entries(data)
 
 
 def _briefing_from_claude(top_15: list[dict], system_prompt: str) -> str:
@@ -234,7 +169,7 @@ def _briefing_from_claude(top_15: list[dict], system_prompt: str) -> str:
         except Exception as e:
             if "529" in str(e) or "overloaded" in str(e).lower():
                 if attempt < max_retries - 1:
-                    wait = 2**attempt * 5  # 5s, 10s, 20s
+                    wait = 2**attempt * 5
                     time.sleep(wait)
                     continue
             raise
@@ -280,126 +215,61 @@ def run() -> None:
         },
     )
 
-    # Step 4 — Query generation (Claude)
     cold_start = _is_cold_start()
     cold_start_keywords = _load_cold_start_keywords() if cold_start else []
     logger.log(
         "cold_start_detected",
         {"cold_start": cold_start, "keywords": cold_start_keywords if cold_start else []},
     )
-    if cold_start:
-        query_prompt_path = BASE / "prompts" / "query_generation_cold_start.txt"
-        query_system = query_prompt_path.read_text(encoding="utf-8")
-        try:
-            generated_queries = _queries_from_claude_cold_start(
-                cold_start_keywords, query_system, REDDIT_AVAILABLE_SUBREDDITS
-            )
-        except Exception as e:
-            generated_queries = {
-                "arxiv": [],
-                "reddit": {"subreddits": None, "queries": []},
-                "twitter": [],
-            }
-            logger.log("queries_generated_error", {"error": str(e)})
-    else:
-        query_prompt_path = BASE / "prompts" / "query_generation.txt"
-        query_system = query_prompt_path.read_text(encoding="utf-8")
-        try:
-            generated_queries = _queries_from_claude(
-                clusters_data, query_system, REDDIT_AVAILABLE_SUBREDDITS
-            )
-        except Exception as e:
-            generated_queries = {
-                "arxiv": [],
-                "reddit": {"subreddits": None, "queries": []},
-                "twitter": [],
-            }
-            logger.log("queries_generated_error", {"error": str(e)})
+
+    query_prompt_path = (
+        BASE / "prompts" / "query_generation_cold_start.txt"
+        if cold_start
+        else BASE / "prompts" / "query_generation.txt"
+    )
+    query_system = query_prompt_path.read_text(encoding="utf-8")
+
+    generated_queries: list[dict]
+    try:
+        generated_queries = _queries_from_claude(
+            cold_start=cold_start,
+            clusters_data=clusters_data if not cold_start else None,
+            user_interests=cold_start_keywords,
+            system_prompt=query_system,
+        )
+    except Exception as e:
+        generated_queries = []
+        logger.log("queries_generated_error", {"error": str(e)})
+
     logger.log(
         "query_generation_prompt",
-        {
-            "prompt_file": query_prompt_path.name,
-            "cold_start": cold_start,
-            "system_prompt": query_system,
-        },
+        {"prompt_file": query_prompt_path.name, "cold_start": cold_start, "system_prompt": query_system},
     )
     logger.log("queries_generated", {"queries": generated_queries})
 
-    # Step 5 — Scrape
     all_scraped: list[dict] = []
-    for source, queries in generated_queries.items():
-        if source == "reddit":
-            if isinstance(queries, dict):
-                reddit_config = queries
-            elif isinstance(queries, list):
-                reddit_config = {"queries": queries, "subreddits": None}
-            else:
-                reddit_config = {}
-            chosen_subs = reddit_config.get("subreddits") or REDDIT_SUBREDDITS
-            search_queries = reddit_config.get("queries") or []
-            try:
-                items = scrape_reddit(chosen_subs)
-                logger.log(
-                    "scraped",
-                    {
-                        "source": "reddit_subreddits",
-                        "query": chosen_subs,
-                        "count": len(items),
-                        "items": [{"title": i.get("title", ""), "url": i.get("url", "")} for i in items],
-                    },
-                )
-                all_scraped.extend(items)
-                for q in search_queries:
-                    try:
-                        q_items = search_reddit_query(q)
-                        logger.log(
-                            "scraped",
-                            {
-                                "source": "reddit_search",
-                                "query": q,
-                                "count": len(q_items),
-                                "items": [
-                                    {"title": i.get("title", ""), "url": i.get("url", "")}
-                                    for i in q_items
-                                ],
-                            },
-                        )
-                        all_scraped.extend(q_items)
-                    except Exception as e:
-                        logger.log(
-                            "scrape_error",
-                            {"source": "reddit_search", "query": q, "error": str(e)},
-                        )
-            except Exception as e:
-                logger.log("scrape_error", {"source": "reddit", "query": chosen_subs, "error": str(e)})
-            continue
-        if not isinstance(queries, list):
-            continue
-        for query in queries:
-            try:
-                if source == "arxiv":
-                    items = scrape_arxiv(query)
-                    time.sleep(15)
-                elif source == "twitter":
-                    items = scrape_twitter(query)
-                    if query != queries[-1]:
-                        time.sleep(65)
-                else:
-                    continue
-                logger.log(
-                    "scraped",
-                    {
-                        "source": source,
-                        "query": query,
-                        "count": len(items),
-                        "items": [{"title": i.get("title", ""), "url": i.get("url", "")} for i in items],
-                    },
-                )
-                all_scraped.extend(items)
-            except Exception as e:
-                logger.log("scrape_error", {"source": source, "query": query, "error": str(e)})
+    for i, spec in enumerate(generated_queries):
+        q = spec.get("query") or ""
+        domains = spec.get("domains")
+        tag = spec.get("source") or ""
+        try:
+            items = run_search(q, domains=domains)
+            logger.log(
+                "scraped",
+                {
+                    "domains": domains,
+                    "generator_source": tag,
+                    "query": q,
+                    "count": len(items),
+                    "items": [{"title": x.get("title", ""), "url": x.get("url", "")} for x in items],
+                },
+            )
+            all_scraped.extend(items)
+        except Exception as e:
+            logger.log("scrape_error", {"query": q, "domains": domains, "error": str(e)})
+        if i < len(generated_queries) - 1:
+            time.sleep(1.5)
 
-    # Step 6 — Embed all scraped items
     embed_results: dict[str, dict] = {}
     for item in all_scraped:
         try:
@@ -431,7 +301,6 @@ def run() -> None:
 
     all_scraped = deduplicate(all_scraped)
 
-    # Step 7 — Score
     scored = score_items(new_items) if new_items else []
     logger.log(
         "scored",
@@ -450,7 +319,6 @@ def run() -> None:
 
     scored = [i for i in scored if i.get("score", 0) > 0]
 
-    # Step 8 — Curation and writing (Claude)
     top_15 = scored[:15]
     logger.log(
         "top_15",
@@ -478,11 +346,19 @@ def run() -> None:
         briefing_content = f"# Briefing\n\n(Error generating briefing: {e})\n"
         logger.log("briefing_error", {"error": str(e)})
 
-    # Step 9 — Write briefing
     write_briefing(briefing_content, BRIEFING_OUTPUT_PATH)
     logger.log("briefing_written", {"path": BRIEFING_OUTPUT_PATH})
+    if _is_s3():
+        d = time.strftime("%Y-%m-%d", time.gmtime())
+        try:
+            _s3_client().put_object(
+                Bucket=S3_BUCKET,
+                Key=f"briefings/{d}.md",
+                Body=briefing_content.encode("utf-8"),
+            )
+        except Exception as e:
+            logger.log("briefing_archive_write_error", {"error": str(e)})
 
-    # Step 9b — Send SNS notification
     if os.getenv("STORAGE_BACKEND") == "s3":
         try:
             import boto3
@@ -502,11 +378,9 @@ def run() -> None:
         except Exception as e:
             logger.log("sns_notification_error", {"error": str(e)})
 
-    # Step 10 — Clear signals
     clear_signals(SIGNALS_PATH)
     logger.log("signals_cleared", {})
 
-    # Step 11 — Upload log to S3
     if os.getenv("STORAGE_BACKEND") == "s3":
         try:
             import boto3

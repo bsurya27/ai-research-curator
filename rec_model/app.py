@@ -41,8 +41,6 @@ S3_BUCKET = os.getenv("S3_BUCKET", "")
 
 app = FastAPI()
 
-SOURCE_KEYS = ("arxiv", "reddit", "twitter", "devto")
-
 _DEFAULT_PREFERENCE = Path(__file__).resolve().parent / "data" / "preference.npy"
 
 
@@ -57,34 +55,47 @@ def _source_weights_path() -> Path:
     return _preference_dir() / "source_weights.json"
 
 
+def _normalize_source_weights(w: dict[str, float]) -> dict[str, float]:
+    if not w:
+        return {}
+    w2 = {str(k): max(0.0, float(v)) for k, v in w.items()}
+    s = sum(w2.values())
+    if s <= 0.0:
+        n = len(w2)
+        return {k: 1.0 / n for k in w2} if n else {}
+    return {k: v / s for k, v in w2.items()}
+
+
 def _load_source_weights() -> dict[str, float]:
     if _is_s3():
         try:
             obj = _s3_client().get_object(Bucket=S3_BUCKET, Key="source_weights.json")
             raw = json.loads(obj["Body"].read().decode("utf-8"))
-            out = {k: float(raw.get(k, 1.0)) for k in SOURCE_KEYS}
-            return _normalize_source_weights(out)
         except Exception:
-            return _normalize_source_weights({k: 1.0 for k in SOURCE_KEYS})
+            return {}
+        if not isinstance(raw, dict):
+            return {}
+        try:
+            out = {str(k): float(v) for k, v in raw.items()}
+        except (TypeError, ValueError):
+            return {}
+        return _normalize_source_weights(out)
     path = _source_weights_path()
     if not path.is_file():
-        return {k: 1.0 for k in SOURCE_KEYS}
+        return {}
     try:
         with open(path, encoding="utf-8") as f:
             raw = json.load(f)
     except Exception as e:
         logger.exception("load source_weights failed: %s", e)
         raise
-    out = {k: float(raw.get(k, 1.0)) for k in SOURCE_KEYS}
+    if not isinstance(raw, dict):
+        return {}
+    try:
+        out = {str(k): float(v) for k, v in raw.items()}
+    except (TypeError, ValueError):
+        return {}
     return _normalize_source_weights(out)
-
-
-def _normalize_source_weights(w: dict[str, float]) -> dict[str, float]:
-    s = sum(w.values())
-    if s == 0.0:
-        return {k: 1.0 for k in SOURCE_KEYS}
-    scale = 4.0 / s
-    return {k: float(v) * scale for k, v in w.items()}
 
 
 def _save_source_weights(w: dict[str, float]) -> None:
@@ -203,13 +214,14 @@ async def update_pref(body: UpdateBody) -> dict[str, Any]:
     current = load_preference(EMBEDDING_DIM)
     updated = update_preference(current, emb, signal, step_size)
     save_preference(updated)
-    weights = _load_source_weights()
-    if body.source in weights:
-        if signal == "like":
-            weights[body.source] *= 1.05
-        else:
-            weights[body.source] *= 0.95
-        _save_source_weights(weights)
+    weights = dict(_load_source_weights())
+    if body.source not in weights:
+        weights[body.source] = 1.0
+    if signal == "like":
+        weights[body.source] *= 1.05
+    else:
+        weights[body.source] *= 0.95
+    _save_source_weights(weights)
     return {
         "updated": True,
         "signal": signal,

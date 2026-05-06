@@ -6,7 +6,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import boto3
 import httpx
-from scraping import search_arxiv, scrape_subreddits, search_twitter
 
 REC_MODEL_URL = "http://localhost:8000"
 TIMEOUT = 60.0
@@ -149,23 +148,13 @@ def clear_signals(signals_path: str) -> None:
             p.write_text("", encoding="utf-8")
 
 
-def scrape_arxiv(query: str, max_results: int = 25, days_back: int = 7) -> list[dict]:
-    """Wrapper around search_arxiv."""
-    return search_arxiv(query, max_results=max_results, days_back=days_back)
+def run_search(
+    query: str,
+    max_results: int = 20,
+    days_back: int = 7,
+    domains: list[str] | None = None,
+) -> list[dict]:
+    """Run one Exa search and return normalized items."""
+    from scraping import search
 
-
-def scrape_reddit(subreddits: list[str], max_results: int = 20, days_back: int = 1) -> list[dict]:
-    """Wrapper around scrape_subreddits."""
-    return scrape_subreddits(subreddits=subreddits, max_results=max_results, days_back=days_back)
-
-
-def scrape_twitter(query: str, max_results: int = 25, days_back: int = 4) -> list[dict]:
-    """Wrapper around search_twitter."""
-    return search_twitter(query, max_results=max_results, days_back=days_back)
-
-
-def search_reddit_query(query: str, max_results: int = 20, days_back: int = 7) -> list[dict]:
-    """Wrapper around search_reddit for keyword search."""
-    from scraping import search_reddit
-
-    return search_reddit(query, max_results=max_results, days_back=days_back)
+    return search(query, max_results=max_results, days_back=days_back, domains=domains)
