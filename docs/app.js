@@ -1,5 +1,4 @@
-// Three-level flow:
-//   L0: short story + birds-eye diagram (CA, RA, you, briefing).
+// Two-level flow:
 //   L1: data-flow overview with numbered steps.
 //   L2: zoom into a connection; cycle arrows are clickable for dimmed focus,
 //       technical notes, and a GitHub link to the exact call site (line anchor).
@@ -7,17 +6,9 @@
 
 (function () {
   const svg = d3.select('#canvas');
-  const mainEl = document.getElementById('main');
-  const canvasWrap = document.getElementById('canvas-wrap');
-  const l0View = document.getElementById('l0-view');
-  const l0DiagramHost = document.getElementById('l0-diagram-host');
   const panel = document.getElementById('panel-content');
   const breadcrumb = document.getElementById('breadcrumb');
   const resetBtn = document.getElementById('reset-view');
-  const ctaL0 = document.getElementById('l0-cta');
-  const elLegendL0 = document.getElementById('legend-l0');
-  const elLegendL1 = document.getElementById('legend-l1');
-  const canvasNode = svg.node();
 
   const VBW = 1600;
   const VBH = 900;
@@ -55,7 +46,6 @@
   gm.append('feMergeNode').attr('in', 'blur');
   gm.append('feMergeNode').attr('in', 'SourceGraphic');
 
-  // Drop shadow under L2 cards for visual depth
   const shadow = defs.append('filter')
     .attr('id', 'card-shadow')
     .attr('x', '-20%').attr('y', '-20%')
@@ -66,7 +56,6 @@
     .attr('flood-color', '#000')
     .attr('flood-opacity', 0.55);
 
-  // Inner top→bottom gradient overlay for "lit from above" depth
   const innerGrad = defs.append('linearGradient')
     .attr('id', 'card-inner').attr('x1', '0%').attr('y1', '0%')
     .attr('x2', '0%').attr('y2', '100%');
@@ -74,7 +63,6 @@
   innerGrad.append('stop').attr('offset', '60%').attr('stop-color', 'rgba(255, 255, 255, 0)');
   innerGrad.append('stop').attr('offset', '100%').attr('stop-color', 'rgba(0, 0, 0, 0.18)');
 
-  // Subtle dot-grid pattern for box backgrounds
   const dotPat = defs.append('pattern')
     .attr('id', 'dot-grid')
     .attr('width', 16).attr('height', 16)
@@ -118,29 +106,31 @@
   resetBtn.addEventListener('click', resetView);
 
   // ─── STATE / NAV ─────────────────────────────────────────────────────────
-  const state = { level: 'L0', number: null, focusId: null };
+  const state = { level: 'L1', number: null, focusId: null };
   let navSeq = 0;
 
   function getConn(n) { return CONNECTIONS.find(c => c.number === n); }
 
-  /** Next/prev connection (1-based), wrapping 7→1 and skipping entries that share the same l2 scene object. */
   function adjacentL2Connection(fromNum, delta) {
-    const len = CONNECTIONS.length;
-    if (len < 1 || fromNum == null) return null;
+    if (fromNum == null) return null;
     const cur = getConn(fromNum);
     if (!cur) return null;
-    const startL2 = cur.l2;
-    let n = fromNum;
-    for (let i = 0; i < len; i++) {
-      n = ((n - 1 + delta + len) % len) + 1;
-      if (getConn(n).l2 !== startL2) return n;
+    const reps = [];
+    const seen = new Set();
+    for (const c of CONNECTIONS) {
+      if (!seen.has(c.l2)) {
+        seen.add(c.l2);
+        reps.push(c.number);
+      }
     }
-    return null;
+    if (reps.length < 2) return null;
+    const curRep = reps.find(n => getConn(n).l2 === cur.l2);
+    const idx = reps.indexOf(curRep);
+    if (idx < 0) return null;
+    const next = (idx + delta + reps.length) % reps.length;
+    return reps[next];
   }
 
-  // JS-driven chase for L2 cycle scenes — single setInterval ticks a `.lit`
-  // class across the arrow groups so every element (arrow, ring, num, caption)
-  // flips state on the exact same frame.
   let cycleTimerId = null;
   function clearCycleChase() {
     if (cycleTimerId !== null) {
@@ -203,41 +193,14 @@
   });
 
   function setHashForState() {
-    const h = state.level === 'L0' ? '#L0'
-      : state.level === 'L1' ? '#L1'
-      : '#L2-' + state.number;
+    const h = state.level === 'L1' ? '#L1' : '#L2-' + state.number;
     if (location.hash !== h) {
       try { history.replaceState(null, '', h); } catch (e) { /* e.g. file:// */ }
     }
   }
 
-  function fillL0Copy() {
-    if (typeof L0 === 'undefined' || !L0) return;
-    document.getElementById('l0-title').textContent = L0.title;
-    document.getElementById('l0-story').textContent = L0.story;
-    document.getElementById('l0-foot').textContent = L0.footnote;
-    ctaL0.textContent = L0.cta;
-    ctaL0.onclick = () => goTo('L1');
-  }
-
   function syncLayoutToLevel() {
-    document.body.dataset.vizLevel = state.level;
-    if (state.level === 'L0') {
-      mainEl.classList.add('l0');
-      fillL0Copy();
-      l0View.removeAttribute('hidden');
-      l0DiagramHost.appendChild(canvasNode);
-    } else {
-      mainEl.classList.remove('l0');
-      l0View.setAttribute('hidden', '');
-      const controls = canvasWrap.querySelector('.canvas-controls');
-      if (canvasNode.parentNode !== canvasWrap) {
-        canvasWrap.insertBefore(canvasNode, controls);
-      }
-    }
-    const is0 = state.level === 'L0';
-    if (elLegendL0) elLegendL0.hidden = !is0;
-    if (elLegendL1) elLegendL1.hidden = is0;
+    if (document.body) document.body.dataset.vizLevel = state.level;
   }
 
   function goTo(level, number) {
@@ -247,7 +210,6 @@
     clearCycleChase();
     state.focusId = null;
 
-    // Fade-out then clear then redraw
     const prev = sceneRoot.selectAll('*');
     prev.transition().duration(180).style('opacity', 0).remove();
 
@@ -259,8 +221,7 @@
     setTimeout(() => {
       if (mySeq !== navSeq) return;
       sceneRoot.attr('opacity', 0);
-      if (state.level === 'L0') renderL0();
-      else if (state.level === 'L1') renderL1();
+      if (state.level === 'L1') renderL1();
       else if (state.level === 'L2') renderL2(getConn(state.number));
       sceneRoot.transition().duration(240).attr('opacity', 1);
       resetView();
@@ -286,8 +247,6 @@
       breadcrumb.appendChild(s);
     };
 
-    add('Intro', () => goTo('L0'), state.level === 'L0');
-    sep();
     add('Overview', () => goTo('L1'), state.level === 'L1');
     if (state.level === 'L2') {
       sep();
@@ -298,16 +257,11 @@
   }
 
   function updatePanel() {
-    if (state.level === 'L0') {
-      panel.innerHTML = '';
-      return;
-    }
     if (state.level === 'L1') {
       panel.innerHTML = `
-        <div class="kicker">L1 · The daily loop</div>
         <h2>${escapeHtml(L1_OVERVIEW.title)}</h2>
         <p>${escapeHtml(L1_OVERVIEW.paragraph)}</p>
-        <h3>The 10 steps</h3>
+        <h3>The 8 steps</h3>
         <ul class="step-list">
           ${STEPS.map(s => `
             <li data-c="${s.connection}">
@@ -330,8 +284,8 @@
       const l2NavHtml = (prevN != null || nextN != null)
         ? `<h3>Navigate</h3>
           <div class="step-nav">
-            ${prevN != null ? `<button class="nav-btn" onclick="window.__goL2(${prevN})">← ${prevN}</button>` : '<span></span>'}
-            ${nextN != null ? `<button class="nav-btn" onclick="window.__goL2(${nextN})">${nextN} →</button>` : '<span></span>'}
+            ${prevN != null ? `<button class="nav-btn" onclick="window.__goL2(${prevN})">← Prev scene</button>` : '<span></span>'}
+            ${nextN != null ? `<button class="nav-btn" onclick="window.__goL2(${nextN})">Next scene →</button>` : '<span></span>'}
           </div>`
         : '';
       if (scene.type === 'cycle') {
@@ -400,12 +354,9 @@
   };
 
   // ─── EMBEDDING SPACE GRAPHIC ─────────────────────────────────────────────
-  // Scatter plot with 3 clusters + a highlighted preference arrow.
   function renderEmbeddingGraphic(parent, w, h, detail = 'small') {
     const g = parent.append('g').attr('class', 'embedding-graphic');
-    // Bounding rect is drawn by caller (the node card). We just draw contents.
 
-    // Seeded pseudo-random for consistent dot positions
     let seed = 7;
     const rnd = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
 
@@ -430,7 +381,6 @@
       }
     });
 
-    // Cluster halo (translucent) on dominant cluster
     g.append('circle')
       .attr('cx', 0.72 * w).attr('cy', 0.30 * h)
       .attr('r', 0.16 * Math.min(w, h))
@@ -439,7 +389,6 @@
       .attr('stroke-width', 0.8)
       .attr('stroke-dasharray', '3 3');
 
-    // Preference arrow from center toward the "liked" cluster
     const ox = 0.5 * w, oy = 0.5 * h;
     const tx = 0.68 * w, ty = 0.34 * h;
     g.append('line')
@@ -457,12 +406,10 @@
       .attr('font-weight', 600)
       .text('preference');
 
-    // Dim origin dot
     g.append('circle')
       .attr('cx', ox).attr('cy', oy)
       .attr('r', 3).attr('fill', '#ff6b9d').attr('opacity', 0.6);
 
-    // Tiny axes hint (corner)
     g.append('text')
       .attr('x', w - 8).attr('y', h - 6)
       .attr('text-anchor', 'end')
@@ -474,176 +421,76 @@
     return g;
   }
 
-  // ─── L0: sketch layout — you + briefing center, CA / RA sides, notes beside agents
-  function l0WrapLines(str, maxLen) {
-    const words = String(str).split(/\s+/);
-    const lines = [];
-    let cur = '';
-    words.forEach((w) => {
-      const next = cur ? `${cur} ${w}` : w;
-      if (next.length <= maxLen) cur = next;
-      else {
-        if (cur) lines.push(cur);
-        cur = w;
-      }
-    });
-    if (cur) lines.push(cur);
-    return lines.slice(0, 7);
-  }
-
-  function l0DrawCallout(parent, x, y, w, lines, accent) {
-    const pad = 11;
-    const lh = 14;
-    const hh = Math.max(86, lines.length * lh + pad * 2 + 4);
-    const g = parent.append('g').attr('class', 'l0-floating-note');
-    g.append('rect')
-      .attr('x', x).attr('y', y).attr('width', w).attr('height', hh)
-      .attr('rx', 10).attr('ry', 10)
-      .attr('fill', 'rgba(12, 12, 26, 0.94)')
-      .attr('stroke', accent)
-      .attr('stroke-width', 1.2);
-    lines.forEach((line, i) => {
-      g.append('text')
-        .attr('x', x + pad)
-        .attr('y', y + pad + 11 + i * lh)
-        .attr('fill', 'rgba(220, 222, 240, 0.95)')
-        .attr('font-size', 11)
-        .attr('font-family', 'Inter, system-ui, sans-serif')
-        .text(line);
-    });
-  }
-
-  function l0EdgeStrokeText(gg, x, y, text) {
-    gg.append('text')
-      .attr('class', 'l0-edge-label')
-      .attr('x', x).attr('y', y)
-      .attr('text-anchor', 'middle')
-      .attr('fill', 'rgba(232, 234, 248, 0.92)')
-      .attr('font-size', 10.5)
-      .attr('stroke', 'rgba(4, 4, 14, 0.9)')
-      .attr('stroke-width', 3)
-      .attr('paint-order', 'stroke')
-      .text(text);
-  }
-
-  /** L0 positions only; w/h/labels/shapes/categories come from L1_NODES so visuals stay in sync with L1/L2. */
-  function l0NodeFromL1(id, cx, cy) {
-    const n = L1_NODES.find(nn => nn.id === id);
-    if (!n) return null;
-    return { ...n, x: cx, y: cy };
-  }
-
-  function renderL0() {
-    const g0 = sceneRoot.append('g').attr('class', 'l0-scene');
-    if (typeof L0 === 'undefined' || !L0) return;
-
-    // Hub layout: user at circle center; briefing + both agents on the ring at 120°.
-    const hubX = 800;
-    const hubY = 430;
-    const ringR = 248;
-    const rad = (deg) => (deg * Math.PI) / 180;
-    const ringPos = (deg) => ({
-      x: hubX + ringR * Math.cos(rad(deg)),
-      y: hubY + ringR * Math.sin(rad(deg)),
-    });
-
-    const briefing = l0NodeFromL1('briefing', ringPos(-90).x, ringPos(-90).y);
-    const curator = l0NodeFromL1('curator', ringPos(150).x, ringPos(150).y);
-    const reporter = l0NodeFromL1('reporter', ringPos(30).x, ringPos(30).y);
-    const user = l0NodeFromL1('user', hubX, hubY);
-
-    const caLines = l0WrapLines(L0.calloutCA, 32);
-    const raLines = l0WrapLines(L0.calloutRA, 32);
-
-    g0.append('circle')
-      .attr('class', 'l0-hub-ring')
-      .attr('cx', hubX).attr('cy', hubY).attr('r', 92)
-      .attr('fill', 'none')
-      .attr('stroke', 'rgba(255, 255, 255, 0.07)')
-      .attr('stroke-width', 1.2);
-
-    // Reporter → curation: bulge *down* (negative offset — positive offset bends up
-    // through the hub and reads as duplicate / “residual” strokes over other arrows).
-    const arcOver = stepPath(reporter, curator, -280);
-    g0.append('path')
-      .attr('class', 'l0-flow-arrow')
-      .attr('d', arcOver.d)
-      .attr('marker-end', 'url(#arrow)');
-    l0EdgeStrokeText(g0, 800, 668, 'How you reacted gets sent back');
-
-    const caToBr = stepPath(curator, briefing, 0);
-    g0.append('path')
-      .attr('class', 'l0-flow-arrow')
-      .attr('d', caToBr.d)
-      .attr('marker-end', 'url(#arrow)');
-    l0EdgeStrokeText(g0, 668, 348, 'into briefing');
-
-    const brToRa = stepPath(briefing, reporter, 0);
-    g0.append('path')
-      .attr('class', 'l0-flow-arrow')
-      .attr('d', brToRa.d)
-      .attr('marker-end', 'url(#arrow)');
-    l0EdgeStrokeText(g0, 932, 348, 'review');
-
-    const brToUser = stepPath(briefing, user, 0);
-    g0.append('path')
-      .attr('class', 'l0-flow-arrow l0-warm')
-      .attr('d', brToUser.d)
-      .attr('marker-end', 'url(#arrow)');
-    l0EdgeStrokeText(g0, 828, 308, 'read');
-
-    const gNodes = g0.append('g').attr('class', 'nodes-layer');
-    [curator, reporter, briefing, user].forEach((n) => {
-      const g = gNodes.append('g')
-        .datum(n)
-        .attr('class', 'node')
-        .attr('transform', `translate(${n.x - n.w / 2}, ${n.y - n.h / 2})`);
-      if (n.shape === 'pages') renderPagesNode(g, n);
-      else if (n.shape === 'person') renderPersonNode(g, n);
-      else renderDefaultNode(g, n);
-    });
-
-    l0DrawCallout(g0, 268, 468, 200, caLines, 'rgba(255, 120, 170, 0.55)');
-    l0DrawCallout(g0, 1132, 468, 200, raLines, 'rgba(90, 200, 255, 0.55)');
-  }
-
   // ─── L1 ──────────────────────────────────────────────────────────────────
   function renderL1() {
-    // Auto-assign a perpendicular offset to each step's arrow so that when
-    // multiple steps share the same pair of modules they fan out in parallel
-    // instead of piling on top of each other. Offsets are assigned in the
-    // canonical (alphabetically-sorted) direction, then flipped for steps
-    // drawn in the reverse direction so the three arrows actually visually
-    // diverge rather than coincidentally landing on the same side.
-    const SPACING = 130;
+    // ── Helper: resolve a step endpoint to a node or virtual port ─────────
+    function resolveNode(id) {
+      if (id === '_embedding_port_5') return EMBEDDING_PORT_5;
+      if (id === '_embedding_port_8') return EMBEDDING_PORT_8;
+      if (id === '_embedding_port')   return EMBEDDING_PORT_5; // fallback
+      return L1_NODES.find(n => n.id === id) || null;
+    }
+
+    // ── Draw dashed region boxes first (behind everything) ────────────────
+    if (typeof L1_REGIONS !== 'undefined' && L1_REGIONS.length) {
+      const gRegions = sceneRoot.append('g').attr('class', 'regions-layer');
+      L1_REGIONS.forEach(r => {
+        const rg = gRegions.append('g').attr('class', 'l1-region');
+        rg.append('rect')
+          .attr('x', r.x).attr('y', r.y)
+          .attr('width', r.w).attr('height', r.h)
+          .attr('rx', 16).attr('ry', 16)
+          .attr('fill', 'rgba(255, 255, 255, 0.018)')
+          .attr('stroke', 'rgba(255, 255, 255, 0.28)')
+          .attr('stroke-width', 1.5)
+          .attr('stroke-dasharray', '9 6');
+        const labelX = r.labelAnchor === 'right' ? r.x + r.w - 18 : r.x + 18;
+        const labelAnchor = r.labelAnchor === 'right' ? 'end' : 'start';
+        rg.append('text')
+          .attr('x', labelX).attr('y', r.y + 30)
+          .attr('fill', 'rgba(255, 255, 255, 0.72)')
+          .attr('font-family', 'Inter, system-ui, sans-serif')
+          .attr('font-size', 17)
+          .attr('font-style', r.italic ? 'italic' : 'normal')
+          .attr('font-weight', 700)
+          .attr('letter-spacing', '0.03em')
+          .attr('text-anchor', labelAnchor)
+          .text(r.label);
+      });
+    }
+
+    // ── Step arrows (elbow paths) ─────────────────────────────────────────
+    // Parallel steps between same pair get a small vertical offset so they
+    // don't stack. For elbow arrows the offset shifts the elbow bend point.
+    const PARALLEL_OFFSET = 28;
     const bucket = new Map();
     STEPS.forEach(s => {
       const key = [s.from, s.to].sort().join('|');
       if (!bucket.has(key)) bucket.set(key, []);
       bucket.get(key).push(s);
     });
-    const stepOffset = new Map();
-    bucket.forEach((group, key) => {
-      const [canonA] = key.split('|');
-      const n = group.length;
+    const stepParallelIdx = new Map();
+    bucket.forEach((group) => {
       group.sort((a, b) => a.n - b.n).forEach((s, i) => {
-        let off = (i - (n - 1) / 2) * SPACING;
-        if (s.from !== canonA) off = -off;  // flip for reversed direction
-        stepOffset.set(s.n, off);
+        stepParallelIdx.set(s.n, { idx: i, total: group.length });
       });
     });
 
-    // ── Step arrows (one per step, with offset for parallels) ────────────
     const gStepArrows = sceneRoot.append('g').attr('class', 'step-arrows-layer');
     const stepGeom = new Map();
+
     STEPS.forEach(s => {
-      const from = L1_NODES.find(n => n.id === s.from);
-      const to   = L1_NODES.find(n => n.id === s.to);
-      const waypoint = s.waypoint ? L1_NODES.find(n => n.id === s.waypoint) : null;
-      const geom = waypoint
-        ? waypointPath(from, waypoint, to)
-        : stepPath(from, to, stepOffset.get(s.n));
+      const from = resolveNode(s.from);
+      const to   = resolveNode(s.to);
+      if (!from || !to) return;
+
+      const pi = stepParallelIdx.get(s.n) || { idx: 0, total: 1 };
+      const autoShift = (pi.idx - (pi.total - 1) / 2) * PARALLEL_OFFSET;
+      const parallelShift = (typeof s.shift === 'number') ? s.shift : autoShift;
+
+      const geom = elbowPath(from, to, s.route || 'h-v', parallelShift);
       stepGeom.set(s.n, geom);
+
       gStepArrows.append('path')
         .attr('class', `step-arrow step-arrow-${s.n}`)
         .attr('d', geom.d)
@@ -651,7 +498,7 @@
         .style('--step-delay', `${(s.n - 1) * 1.5}s`);
     });
 
-    // ── Module nodes ─────────────────────────────────────────────────────
+    // ── Module nodes ──────────────────────────────────────────────────────
     const gNodes = sceneRoot.append('g').attr('class', 'nodes-layer');
     L1_NODES.forEach(n => {
       const g = gNodes.append('g')
@@ -663,12 +510,14 @@
       else                           renderDefaultNode(g, n);
     });
 
-    // ── Numbered step markers, placed at the midpoint of their arrow ─────
+    // ── Numbered step markers ─────────────────────────────────────────────
     const gMarks = sceneRoot.append('g').attr('class', 'marks-layer');
     STEPS.forEach(s => {
+      const geom = stepGeom.get(s.n);
+      if (!geom) return;
       const conn = CONNECTIONS.find(c => c.number === s.connection);
-      const hosts = conn && conn.hosts || [];
-      const { x: mx, y: my } = stepGeom.get(s.n).mid;
+      const hosts = (conn && conn.hosts) || [];
+      const { x: mx, y: my } = geom.mid;
 
       const g = gMarks.append('g')
         .attr('class', `step-marker step-marker-${s.n}`)
@@ -705,10 +554,10 @@
 
       const lp = s.labelPos || 'below';
       let lx = 0, ly = 0, anchor = 'middle';
-      if (lp === 'below')      { ly = 36; anchor = 'middle'; }
+      if (lp === 'below')      { ly = 36;  anchor = 'middle'; }
       else if (lp === 'above') { ly = -28; anchor = 'middle'; }
-      else if (lp === 'left')  { lx = -28; ly = 4; anchor = 'end'; }
-      else if (lp === 'right') { lx = 28;  ly = 4; anchor = 'start'; }
+      else if (lp === 'left')  { lx = -32; ly = 4; anchor = 'end'; }
+      else if (lp === 'right') { lx = 32;  ly = 4; anchor = 'start'; }
 
       g.append('text')
         .attr('class', 'step-label')
@@ -718,10 +567,78 @@
     });
   }
 
-  // Quadratic-bezier path between two nodes, with perpendicular bulge = offset.
-  // Parallel arrows also get their endpoints shifted along the boundary so
-  // they don't all start/end at the same point.
-  // Returns the path `d` plus the geometric midpoint (where the step marker sits).
+  // ─── ELBOW PATH ──────────────────────────────────────────────────────────
+  // Right-angle arrows. Virtual ports have w=0 h=0 so boundary math still works.
+  function elbowPath(from, to, route, parallelShift) {
+    parallelShift = parallelShift || 0;
+    const fx = from.x, fy = from.y;
+    const tx = to.x,   ty = to.y;
+    const fR = fx + from.w / 2, fL = fx - from.w / 2;
+    const fB = fy + from.h / 2, fT = fy - from.h / 2;
+    const tR = tx + to.w / 2,   tL = tx - to.w / 2;
+    const tB = ty + to.h / 2,   tT = ty - to.h / 2;
+
+    let d, mid;
+
+    if (route === 'h') {
+      // Horizontal exit → vertical snap if y differs.
+      // parallelShift moves BOTH source and target y so the line stays
+      // purely horizontal but at a different height (used to lift / drop
+      // an 'h' arrow on the target's vertical edge).
+      const sx = tx > fx ? fR : fL;
+      const sy = fy + parallelShift;
+      const ex = tx > fx ? tL : tR;
+      const ey = ty + parallelShift;
+      if (Math.abs(ey - sy) > 6) {
+        d = `M ${sx} ${sy} H ${ex} V ${ey}`;
+      } else {
+        d = `M ${sx} ${sy} H ${ex}`;
+      }
+      mid = { x: (sx + ex) / 2, y: sy };
+
+    } else if (route === 'v') {
+      // Vertical exit → horizontal snap if x differs
+      const sx = fx + parallelShift;
+      const sy = ty > fy ? fB : fT;
+      const ex = tx;
+      const ey = ty > fy ? tT : tB;
+      if (Math.abs(ex - sx) > 6) {
+        d = `M ${sx} ${sy} V ${ey} H ${ex}`;
+      } else {
+        d = `M ${sx} ${sy} V ${ey}`;
+      }
+      mid = { x: sx, y: (sy + ey) / 2 };
+
+    } else if (route === 'h-v') {
+      // Exit horizontally → turn at target's x → arrive vertically at target edge
+      const goRight = tx >= fx;
+      const goDown  = ty >= fy;
+      const sx = goRight ? fR : fL;
+      const sy = fy + parallelShift;
+      // Horizontal leg stops at target's x-center
+      const bendX = tx + parallelShift;
+      // Vertical leg arrives at target's nearest horizontal edge
+      const ey = goDown ? tT : tB;
+      d = `M ${sx} ${sy} H ${bendX} V ${ey}`;
+      mid = { x: (sx + bendX) / 2, y: sy };
+
+    } else {
+      // v-h: exit vertically → turn at target's y → arrive horizontally at target edge
+      const goDown  = ty >= fy;
+      const goRight = tx >= fx;
+      const sx = fx + parallelShift;
+      const sy = goDown ? fB : fT;
+      // Vertical leg stops at target's y-center
+      const bendY = ty + parallelShift;
+      // Horizontal leg arrives at target's nearest vertical edge
+      const ex = goRight ? tL : tR;
+      d = `M ${sx} ${sy} V ${bendY} H ${ex}`;
+      mid = { x: sx, y: (sy + bendY) / 2 };
+    }
+
+    return { d, mid };
+  }
+
   function stepPath(from, to, offset) {
     const angle = Math.atan2(to.y - from.y, to.x - from.x);
     const f0 = boundaryPoint(from, angle);
@@ -743,17 +660,12 @@
     };
   }
 
-  // Polyline arrow from `from` through `waypoint` to `to`. Endpoints sit on
-  // node boundaries, the middle vertex is the waypoint center. The waypoint
-  // box itself will cover the line's corner, so visually the arrow looks
-  // like it "enters" and "exits" the waypoint.
   function waypointPath(from, waypoint, to) {
     const a1 = Math.atan2(waypoint.y - from.y, waypoint.x - from.x);
     const f = boundaryPoint(from, a1);
     const a2 = Math.atan2(to.y - waypoint.y, to.x - waypoint.x);
     const t = boundaryPoint(to, a2 + Math.PI);
     const w = { x: waypoint.x, y: waypoint.y };
-    // Marker sits along the second leg (waypoint → to) for clarity.
     return {
       d: `M ${f.x} ${f.y} L ${w.x} ${w.y} L ${t.x} ${t.y}`,
       mid: { x: (w.x + t.x) / 2, y: (w.y + t.y) / 2 },
@@ -774,6 +686,21 @@
       .attr('width', 4).attr('height', n.h).attr('rx', 2)
       .attr('fill', `url(#grad-${n.category})`);
 
+    if (n.bullets && n.bullets.length) {
+      g.append('text').attr('class', 'label')
+        .attr('x', n.w / 2).attr('y', 30)
+        .attr('text-anchor', 'middle')
+        .text(n.label);
+      const startY = 58;
+      const lh = 19;
+      n.bullets.forEach((b, i) => {
+        g.append('text').attr('class', 'node-bullet')
+          .attr('x', 22).attr('y', startY + i * lh)
+          .text(`• ${b}`);
+      });
+      return;
+    }
+
     const hasSublabel = !!n.sublabel;
     g.append('text').attr('class', 'label')
       .attr('x', 18).attr('y', hasSublabel ? 36 : n.h / 2 + 5)
@@ -785,8 +712,6 @@
     }
   }
 
-  // A "document" glyph: two page shadows behind the main page, with small
-  // horizontal lines mimicking text below the title.
   function renderPagesNode(g, n) {
     const shadow = g.append('g').attr('class', 'pages-shadow');
     for (let i = 2; i >= 1; i--) {
@@ -812,7 +737,6 @@
     g.append('text').attr('class', 'label')
       .attr('x', 16).attr('y', 26).text(n.label);
 
-    // Fake text lines inside the page
     const lineY0 = 42, lineGap = 11;
     const maxLines = Math.floor((ph - lineY0 - 10) / lineGap);
     for (let i = 0; i < maxLines; i++) {
@@ -826,7 +750,6 @@
     }
   }
 
-  // A minimal user-profile glyph: head + shoulders, on a faint backing card.
   function renderPersonNode(g, n) {
     g.append('rect')
       .attr('class', 'node-card')
@@ -858,7 +781,6 @@
   function renderL2(conn) {
     const scene = conn.l2;
 
-    // Title banner
     const banner = sceneRoot.append('g').attr('transform', `translate(${VBW / 2}, 48)`);
     const kicker = scene.kicker
       || `CONNECTION ${conn.number} · ${scene.type === 'reasoning' ? 'INTERNAL REASONING' : 'TOOL CALLS'}`;
@@ -875,11 +797,6 @@
     else if (scene.type === 'reasoning') renderReasoningScene(scene);
     else                                 renderConnectionScene(scene);
   }
-
-  // ─── L2: cycle scene ─────────────────────────────────────────────────────
-  // A shared L2 view that spans multiple L1 steps (e.g. the reporter cycle:
-  // briefing → user → reporter → signals.txt). Arrows carry a plain-language
-  // caption; the whole chase cycles.
 
   function renderCycleScene(scene, _conn) {
     const gNodes  = sceneRoot.append('g').attr('class', 'cycle-nodes');
@@ -926,8 +843,6 @@
     const nx = -(t0.y - f0.y) / len;
     const ny =  (t0.x - f0.x) / len;
 
-    // Optional perpendicular parallel shift — keeps the arrow a dead-straight
-    // line, just offset from the node-center axis so stacked arrows don't overlap.
     const offset = a.offset || 0;
     const fx = f0.x + nx * offset, fy = f0.y + ny * offset;
     const tx = t0.x + nx * offset, ty = t0.y + ny * offset;
@@ -973,16 +888,17 @@
       .attr('text-anchor', 'middle').attr('dominant-baseline', 'central')
       .text(a.stepNum);
 
-    // Caption placement by side (plain language only; no API/tool sublines)
+    // Markers are r=20 circles centered on the arrow midpoint.
+    // Above/below labels are 80px tall; clear the marker by ~10px on each side.
     let capX, capY, capCls = '';
     if (side === 'above') {
-      capX = mx - CAP_W / 2 + dxOff; capY = my - 82 + dyOff;
+      capX = mx - CAP_W / 2 + dxOff; capY = my - 110 + dyOff;
     } else if (side === 'below') {
-      capX = mx - CAP_W / 2 + dxOff; capY = my + 28 + dyOff;
+      capX = mx - CAP_W / 2 + dxOff; capY = my + 30 + dyOff;
     } else if (side === 'right') {
       capX = mx + 34 + dxOff;        capY = my - 44 + dyOff;
       capCls = ' side-right';
-    } else { // 'left' (default for vertical)
+    } else {
       capX = mx - CAP_W - 34 + dxOff; capY = my - 44 + dyOff;
       capCls = ' side';
     }
@@ -1001,11 +917,6 @@
   }
 
   // ─── L2: connection scene ────────────────────────────────────────────────
-  // Two rich boxes on left/right (optionally a sink box at the bottom).
-  // Tool calls live as ROWS inside the agent box. Arrows originate from each
-  // row and terminate on the opposite box's edge — no labels on the arrow.
-  // The arrowhead direction reflects which way the data flows.
-
   const HEADER_H = 96;
   const ROW_H    = 38;
   const PAD_BOT  = 28;
@@ -1015,9 +926,6 @@
     const AVAIL_H = VBH - CANVAS_TOP - 40;
     const CY = CANVAS_TOP + AVAIL_H / 2;
 
-    // Only ops that look like function calls become "tool rows".
-    // UI/user events (e.g., "star click") are described in side panel only —
-    // the user box's schema text already names them.
     const isFnCall = (op) => op && /^[\w.]+\(/.test(op.tool);
     const allOps = (scene.operations || []).filter(isFnCall);
     const horizOps = allOps.filter(o => o.dir === 'right' || o.dir === 'left');
@@ -1028,8 +936,6 @@
     const rightIsGraphic = scene.right.kind === 'embedding-graphic';
     const rightIsStack   = scene.right.kind === 'external-stack';
 
-    // Tool surface = rows shown inside the agent box. Always hosted by the
-    // agent that owns the call.
     const leftSurface  = [];
     const rightSurface = [];
     horizOps.forEach(op => {
@@ -1045,7 +951,6 @@
 
     function surfaceH(n) { return HEADER_H + n * ROW_H + PAD_BOT; }
 
-    // Box dimensions
     const leftW = 340;
     const rightW = rightIsGraphic ? 500 : rightIsStack ? 360 : 340;
 
@@ -1054,22 +959,18 @@
     if (rightIsGraphic) rightH = Math.max(rightH, 380);
     if (rightIsStack)   rightH = Math.max(rightH, 280);
 
-    // Left position. Right position is mirrored.
     const LX = 260;
     const RX = VBW - (rightW / 2 + 80);
 
     const left  = { x: LX,  y: CY - (leftH  / 2) + (leftH  / 2), w: leftW,  h: leftH  };
     const right = { x: RX,  y: CY - (rightH / 2) + (rightH / 2), w: rightW, h: rightH };
-    // Center both vertically on the same midline:
     left.y  = CY;
     right.y = CY;
 
-    // Render the two rich boxes
     const gBoxes = sceneRoot.append('g').attr('class', 'scene-boxes');
     renderRichBox(gBoxes, left,  scene.left,  leftSurface,  'left');
     renderRichBox(gBoxes, right, scene.right, rightSurface, 'right');
 
-    // Optional sink box (signals.txt at the bottom for connection 7)
     let sink = null;
     if (scene.sink) {
       sink = { x: VBW / 2, y: VBH - 110, w: 380, h: 110 };
@@ -1077,7 +978,6 @@
                     sink, scene.sink, [], 'sink');
     }
 
-    // Draw clean arrows from each tool row to the opposite box's edge
     const gArrows = sceneRoot.insert('g', '.scene-boxes').attr('class', 'scene-arrows');
 
     function rowY(box, surface, op) {
@@ -1092,7 +992,7 @@
       const surface  = onLeft ? leftSurface : rightSurface;
 
       const homeY = rowY(homeBox, surface, op);
-      const otherY = homeY;  // straight horizontal
+      const otherY = homeY;
 
       const homeX = onLeft ? homeBox.x + homeBox.w / 2 : homeBox.x - homeBox.w / 2;
       const otherX = onLeft ? otherBox.x - otherBox.w / 2 : otherBox.x + otherBox.w / 2;
@@ -1100,7 +1000,6 @@
       drawConnectionArrow(gArrows, homeX, homeY, otherX, otherY, op);
     });
 
-    // Sink arrows: from each sink-row in the agent box to the sink box top
     if (sink) {
       sinkOps.forEach((op, i) => {
         const onLeft = leftSurface.includes(op);
@@ -1115,23 +1014,17 @@
     }
   }
 
-  // ─── Arrow renderers ─────────────────────────────────────────────────────
   function drawConnectionArrow(parent, fx, fy, tx, ty, op) {
     const cls = 'scene-edge' + (op.dashed ? ' dashed' : '');
     const line = parent.append('line')
       .attr('class', cls)
       .attr('x1', fx).attr('y1', fy)
       .attr('x2', tx).attr('y2', ty);
-    // Direction is determined by op.dir, NOT by which box hosts the row.
-    // op.dir === 'right' → arrowhead on the right end.
-    // op.dir === 'left'  → arrowhead on the left end.
     const arrowOnRight = op.dir === 'right';
     if (fx < tx) {
-      // Line drawn left-to-right: marker-end is on the right
       if (arrowOnRight) line.attr('marker-end', 'url(#arrow)');
       else              line.attr('marker-start', 'url(#arrow-bi-start)');
     } else {
-      // Line drawn right-to-left: marker-end is on the left
       if (arrowOnRight) line.attr('marker-start', 'url(#arrow-bi-start)');
       else              line.attr('marker-end', 'url(#arrow)');
     }
@@ -1147,7 +1040,6 @@
       .attr('marker-end', 'url(#arrow)');
   }
 
-  // ─── L2: rich box (header + body) ────────────────────────────────────────
   function renderRichBox(parent, box, party, surface, position) {
     const g = parent.append('g').attr('class', 'rich-box')
       .attr('transform', `translate(${box.x - box.w / 2}, ${box.y - box.h / 2})`);
@@ -1159,7 +1051,6 @@
               : party.kind === 'user' ? 'user' : 'data';
     const isAgent = party.kind === 'agent';
 
-    // Drop shadow under the card
     g.append('rect')
       .attr('class', 'rich-box-shadow')
       .attr('width', box.w).attr('height', box.h)
@@ -1167,19 +1058,16 @@
       .attr('fill', 'rgba(8, 8, 16, 0.95)')
       .attr('filter', 'url(#card-shadow)');
 
-    // Subtle dot-grid backing for texture
     g.append('rect')
       .attr('width', box.w).attr('height', box.h).attr('rx', 16)
       .attr('fill', 'url(#dot-grid)')
       .attr('pointer-events', 'none');
 
-    // Inner top-light → bottom-shade gradient for depth
     g.append('rect')
       .attr('width', box.w).attr('height', box.h).attr('rx', 16)
       .attr('fill', 'url(#card-inner)')
       .attr('pointer-events', 'none');
 
-    // Card border
     g.append('rect')
       .attr('class', 'rich-box-border')
       .attr('width', box.w).attr('height', box.h).attr('rx', 16)
@@ -1187,7 +1075,6 @@
       .attr('stroke', `url(#grad-${cat})`)
       .attr('stroke-width', isAgent ? 2 : 1.5);
 
-    // Glow halo on agent boxes
     if (isAgent) {
       g.append('rect')
         .attr('width', box.w).attr('height', box.h).attr('rx', 16)
@@ -1199,12 +1086,10 @@
         .attr('pointer-events', 'none');
     }
 
-    // Left accent strip
     g.append('rect')
       .attr('width', 5).attr('height', box.h).attr('rx', 2)
       .attr('fill', `url(#grad-${cat})`);
 
-    // ── Header ────────────────────────────────────────────────────────────
     g.append('text').attr('class', 'box-tag')
       .attr('x', 24).attr('y', 28)
       .attr('fill', `url(#grad-${cat})`)
@@ -1220,12 +1105,10 @@
         .text(party.sublabel);
     }
 
-    // Header divider
     g.append('line').attr('class', 'box-divider')
       .attr('x1', 22).attr('y1', HEADER_H - 8)
       .attr('x2', box.w - 22).attr('y2', HEADER_H - 8);
 
-    // ── Body: tool surface (if any) ───────────────────────────────────────
     if (surface && surface.length > 0) {
       const onLeft = position === 'left';
       surface.forEach((op, i) => {
@@ -1235,18 +1118,15 @@
           : op.tool;
 
         const rowG = g.append('g').attr('class', 'tool-row');
-        // Hover background row
         rowG.append('rect')
           .attr('class', 'tool-row-bg')
           .attr('x', 12).attr('y', ry - ROW_H / 2 + 4)
           .attr('width', box.w - 24).attr('height', ROW_H - 8)
           .attr('rx', 6).attr('fill', 'rgba(255, 255, 255, 0.025)');
-        // Indicator dot, always on the side facing the arrow exit
         const dotX = onLeft ? box.w - 18 : 18;
         rowG.append('circle')
           .attr('cx', dotX).attr('cy', ry).attr('r', 3.5)
           .attr('fill', `url(#grad-${cat})`);
-        // Tool name
         const tx = onLeft ? 28 : box.w - 28;
         rowG.append('text')
           .attr('class', 'tool-row-name')
@@ -1256,7 +1136,6 @@
       });
     }
 
-    // ── Body: special content ────────────────────────────────────────────
     if (party.kind === 'embedding-graphic') {
       const padX = 22, padY = HEADER_H + 14;
       const gW = box.w - padX * 2;
@@ -1288,7 +1167,6 @@
       });
     }
 
-    // Storage / user boxes — schema preview if no tool surface and no special graphic
     if ((party.kind === 'storage' || party.kind === 'user')
         && (!surface || surface.length === 0)
         && party.schema) {
@@ -1302,10 +1180,7 @@
     }
   }
 
-  // ─── L2: reasoning scene (inputs → agent → outputs) ──────────────────────
-  // The agent reasons (LLM-backed). Inputs feed in from the left, outputs
-  // emerge from the right. Boxes use the same rich-box style as connection
-  // scenes for visual consistency.
+  // ─── L2: reasoning scene ─────────────────────────────────────────────────
   function renderReasoningScene(scene) {
     const CANVAS_TOP = 130;
     const AVAIL_H = VBH - CANVAS_TOP - 40;
@@ -1316,7 +1191,6 @@
     const inBoxes  = layoutStack(scene.inputs,  LX, CY);
     const outBoxes = layoutStack(scene.outputs, RX, CY);
 
-    // Agent in the middle — taller box with reasoning-specific surface
     const agentBox = { x: MX, y: CY, w: 360, h: 220 };
 
     const gArrows = sceneRoot.append('g').attr('class', 'scene-arrows');
@@ -1407,7 +1281,6 @@
     g.append('rect').attr('width', 5).attr('height', b.h).attr('rx', 2)
       .attr('fill', `url(#grad-agent)`);
 
-    // Header
     g.append('text').attr('class', 'box-tag')
       .attr('x', 24).attr('y', 28)
       .attr('fill', `url(#grad-agent)`)
@@ -1416,7 +1289,6 @@
     g.append('text').attr('class', 'box-title')
       .attr('x', 24).attr('y', 60).text(agent.label);
 
-    // ✦ glyph in the corner
     g.append('text')
       .attr('x', b.w - 24).attr('y', 56).attr('text-anchor', 'end')
       .attr('font-size', 36).attr('fill', `url(#grad-agent)`)
@@ -1425,7 +1297,6 @@
     g.append('line').attr('class', 'box-divider')
       .attr('x1', 22).attr('y1', 86).attr('x2', b.w - 22).attr('y2', 86);
 
-    // Body: a small "LLM brain" panel
     g.append('text').attr('class', 'box-sublabel')
       .attr('x', 24).attr('y', 110)
       .text('hands inputs to a swappable LLM');
@@ -1462,19 +1333,6 @@
     }[c]));
   }
 
-  // ─── INTRO OVERLAY ───────────────────────────────────────────────────────
-  const intro = document.getElementById('intro-overlay');
-  const introBtn = document.getElementById('intro-dismiss');
-  if (localStorage.getItem('arch-intro-seen-v2')) {
-    intro.style.display = 'none';
-  } else {
-    introBtn.addEventListener('click', () => {
-      intro.classList.add('hidden');
-      localStorage.setItem('arch-intro-seen-v2', '1');
-      setTimeout(() => intro.style.display = 'none', 300);
-    });
-  }
-
   // ─── KEYBOARD ────────────────────────────────────────────────────────────
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
@@ -1498,16 +1356,14 @@
   });
 
   // ─── BOOT ────────────────────────────────────────────────────────────────
-  // Deep-link via hash: #L0, #L1, #L2-<n>
   function routeFromHash() {
-    const m = /^#L(0|1|2)(?:-(\d+))?$/.exec(location.hash);
+    const m = /^#L(1|2)(?:-(\d+))?$/.exec(location.hash);
     if (!m) return false;
-    if (m[1] === '0') { goTo('L0'); return true; }
     if (m[1] === '1') { goTo('L1'); return true; }
     const num = m[2] ? +m[2] : 1;
     goTo('L2', num);
     return true;
   }
-  if (!routeFromHash()) goTo('L0');
+  if (!routeFromHash()) goTo('L1');
   window.addEventListener('hashchange', routeFromHash);
 })();
