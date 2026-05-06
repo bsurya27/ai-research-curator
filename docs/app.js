@@ -455,10 +455,10 @@
         const labelX = r.labelAnchor === 'right' ? r.x + r.w - 18 : r.x + 18;
         const labelAnchor = r.labelAnchor === 'right' ? 'end' : 'start';
         rg.append('text')
-          .attr('x', labelX).attr('y', r.y + 30)
+          .attr('x', labelX).attr('y', r.y + 32)
           .attr('fill', 'rgba(255, 255, 255, 0.72)')
           .attr('font-family', 'Inter, system-ui, sans-serif')
-          .attr('font-size', 17)
+          .attr('font-size', 21)
           .attr('font-style', r.italic ? 'italic' : 'normal')
           .attr('font-weight', 700)
           .attr('letter-spacing', '0.03em')
@@ -557,7 +557,7 @@
         .attr('text-anchor', 'middle').attr('dominant-baseline', 'central')
         .attr('fill', '#0a0a14')
         .attr('font-family', 'JetBrains Mono, monospace')
-        .attr('font-weight', 700).attr('font-size', 12)
+        .attr('font-weight', 700).attr('font-size', 14)
         .text(s.n);
 
       const lp = s.labelPos || 'below';
@@ -696,11 +696,11 @@
 
     if (n.bullets && n.bullets.length) {
       g.append('text').attr('class', 'label')
-        .attr('x', n.w / 2).attr('y', 30)
+        .attr('x', n.w / 2).attr('y', 34)
         .attr('text-anchor', 'middle')
         .text(n.label);
-      const startY = 58;
-      const lh = 19;
+      const startY = 64;
+      const lh = 22;
       n.bullets.forEach((b, i) => {
         g.append('text').attr('class', 'node-bullet')
           .attr('x', 22).attr('y', startY + i * lh)
@@ -711,12 +711,12 @@
 
     const hasSublabel = !!n.sublabel;
     g.append('text').attr('class', 'label')
-      .attr('x', 18).attr('y', hasSublabel ? 36 : n.h / 2 + 5)
+      .attr('x', 18).attr('y', hasSublabel ? 40 : n.h / 2 + 6)
       .attr('dominant-baseline', hasSublabel ? 'auto' : 'central')
       .text(n.label);
     if (hasSublabel) {
       g.append('text').attr('class', 'node-sublabel')
-        .attr('x', 18).attr('y', 56).text(n.sublabel);
+        .attr('x', 18).attr('y', 62).text(n.sublabel);
     }
   }
 
@@ -743,9 +743,9 @@
       .attr('stroke-width', 1.5);
 
     g.append('text').attr('class', 'label')
-      .attr('x', 16).attr('y', 26).text(n.label);
+      .attr('x', 16).attr('y', 30).text(n.label);
 
-    const lineY0 = 42, lineGap = 11;
+    const lineY0 = 48, lineGap = 11;
     const maxLines = Math.floor((ph - lineY0 - 10) / lineGap);
     for (let i = 0; i < maxLines; i++) {
       const y = lineY0 + i * lineGap;
@@ -795,10 +795,10 @@
     const title = scene.title || conn.title;
     banner.append('text').attr('text-anchor', 'middle')
       .attr('fill', 'rgba(255, 255, 255, 0.4)')
-      .attr('font-size', 11).attr('letter-spacing', '0.18em')
+      .attr('font-size', 13).attr('letter-spacing', '0.18em')
       .text(kicker.toUpperCase());
-    banner.append('text').attr('text-anchor', 'middle').attr('y', 26)
-      .attr('fill', '#fff').attr('font-size', 24).attr('font-weight', 600)
+    banner.append('text').attr('text-anchor', 'middle').attr('y', 32)
+      .attr('fill', '#fff').attr('font-size', 30).attr('font-weight', 600)
       .text(title);
 
     if (scene.type === 'cycle')          renderCycleScene(scene, conn);
