@@ -193,7 +193,10 @@
   });
 
   function setHashForState() {
-    const h = state.level === 'L1' ? '#L1' : '#L2-' + state.number;
+    let h;
+    if (state.level === 'HOME') h = '#home';
+    else if (state.level === 'L1') h = '#L1';
+    else h = '#L2-' + state.number;
     if (location.hash !== h) {
       try { history.replaceState(null, '', h); } catch (e) { /* e.g. file:// */ }
     }
@@ -223,6 +226,7 @@
       sceneRoot.attr('opacity', 0);
       if (state.level === 'L1') renderL1();
       else if (state.level === 'L2') renderL2(getConn(state.number));
+      // HOME: leave canvas blank; the landing section is shown via CSS.
       sceneRoot.transition().duration(240).attr('opacity', 1);
       resetView();
     }, 180);
@@ -247,6 +251,9 @@
       breadcrumb.appendChild(s);
     };
 
+    if (state.level === 'HOME') return;
+    add('Home', () => goTo('HOME'), false);
+    sep();
     add('Overview', () => goTo('L1'), state.level === 'L1');
     if (state.level === 'L2') {
       sep();
@@ -257,6 +264,7 @@
   }
 
   function updatePanel() {
+    if (state.level === 'HOME') { panel.innerHTML = ''; return; }
     if (state.level === 'L1') {
       panel.innerHTML = `
         <h2>${escapeHtml(L1_OVERVIEW.title)}</h2>
@@ -1357,13 +1365,23 @@
 
   // ─── BOOT ────────────────────────────────────────────────────────────────
   function routeFromHash() {
-    const m = /^#L(1|2)(?:-(\d+))?$/.exec(location.hash);
+    const h = location.hash || '';
+    if (h === '' || h === '#' || h === '#home') { goTo('HOME'); return true; }
+    const m = /^#L(1|2)(?:-(\d+))?$/.exec(h);
     if (!m) return false;
     if (m[1] === '1') { goTo('L1'); return true; }
     const num = m[2] ? +m[2] : 1;
     goTo('L2', num);
     return true;
   }
-  if (!routeFromHash()) goTo('L1');
+  if (!routeFromHash()) goTo('HOME');
   window.addEventListener('hashchange', routeFromHash);
+
+  const ctaBtn = document.getElementById('landing-cta');
+  if (ctaBtn) ctaBtn.onclick = () => goTo('L1');
+  const titleH1 = document.querySelector('.top-bar h1');
+  if (titleH1) {
+    titleH1.style.cursor = 'pointer';
+    titleH1.onclick = () => goTo('HOME');
+  }
 })();

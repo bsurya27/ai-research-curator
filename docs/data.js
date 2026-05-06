@@ -265,11 +265,11 @@ const SCRAPING_CYCLE_L2 = {
     {
       id: 'a', stepNum: 6, connection: 4, from: 'curator', to: 'web',
       labelSide: 'right', labelW: 320,
-      caption: 'Reasons cluster-aware queries and runs each through the web scraper.',
+      caption: 'Reasons cluster-aware queries and fans them out to Exa one at a time.',
       deep: {
-        summary: "Claude turns cluster summaries plus weights into a list of {query, domains} specs that get fed into Exa one at a time.",
-        tech: 'Each spec calls run_search(q, domains=domains); Exa returns results with optional domain filter and a recency cutoff.',
-        vars: ['generated_queries', 'q', 'domains', 'items'],
+        summary: 'Claude turns cluster summaries plus source_weights into a JSON array of {query, domains, source} specs — domains=null means open-web "explore", a hostname list pins the search to e.g. arxiv.org or reddit.com.',
+        tech: 'For each spec the curator calls run_search(q, domains=domains) → Exa client.search(query, num_results=20, type="auto", start_published_date=now-7d, contents.text<=600 chars). livecrawl="never" for reddit, "preferred" elsewhere; category="research paper" is added when arxiv.org is in domains.',
+        vars: ['generated_queries', 'spec.query', 'spec.domains', 'spec.source', 'items'],
         callLine: 'run_search(q, domains=domains)',
         source: { file: 'curation_agent/curator.py', line: 256 },
       },
@@ -277,12 +277,12 @@ const SCRAPING_CYCLE_L2 = {
     {
       id: 'b', stepNum: 7, connection: 4, from: 'web', to: 'newitems',
       labelSide: 'below',
-      caption: "Scraped results land in today's staging in normalized schema.",
+      caption: "Each Exa result is normalized and deduped into today's staging.",
       deep: {
-        summary: 'Each result becomes one normalized dict (title, body, url, date, author, source) before dedupe.',
-        tech: 'Source is inferred from the URL host (arxiv / reddit / twitter / generic); dedupe drops exact url collisions.',
-        vars: ['raw vendor dict', 'inferred source'],
-        callLine: 'normalize_item({...}, src)',
+        summary: 'Per Exa result, source is inferred from the URL host (arxiv.org → "arxiv", reddit.com → "reddit", x.com/twitter.com → "twitter", else the bare host) and the raw fields are folded into a normalized item dict.',
+        tech: 'normalize_item enforces the (title, body, url, date, author, source, extra) schema and validates the ISO date. deduplicate() then collapses arxiv duplicates by canonical paper id (preferring /abs/) before a final URL-level dedupe.',
+        vars: ['r.url', 'r.title', 'r.text', 'r.published_date', 'src', 'raw_items'],
+        callLine: 'normalize_item({title, body, url, date, author}, src)',
         source: { file: 'scraping/exa_scraper.py', line: 107 },
       },
     },

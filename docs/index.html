@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=L2labels3" />
+  <link rel="stylesheet" href="styles.css?v=landing2" />
 </head>
 <body>
   <header class="top-bar">
@@ -22,6 +22,22 @@
   </header>
 
   <main class="main" id="main">
+    <section class="landing-view" id="landing-view" aria-label="About">
+      <div class="landing-card">
+        <p class="landing-eyebrow">A multi-agent system for personal research</p>
+        <h2 class="landing-title">My morning feed, curated by agents that learn from what I read.</h2>
+        <p class="landing-lede">
+          Good ideas need good input. I wasn't getting enough of it. So, I built this small multi-agent system to break a familiar creative block.
+        </p>
+        <p class="landing-body">
+          A curator agent wakes up every morning on an EC2 instance and reads the signals I left from the previous day. It goes out and fetches the latest papers, discussions, and opinions, scores everything against my taste, and writes me a personalized briefing. Then shuts itself down. A reporter agent lives in an always-on interface where I read, rate, and chat. It quietly captures how I interact and feeds it back, so by the next morning the curator knows me a little better than it did the day before. If I'm reading the right things every day, the ideas will come.
+        </p>
+        <button class="landing-cta" id="landing-cta" type="button">
+          Explore the architecture <span aria-hidden="true">→</span>
+        </button>
+        <p class="landing-hint">Every numbered arrow on the next screen drills into the exact module and call line on GitHub. Click a number to zoom · drag to pan · scroll to zoom · ← → navigate · Esc back</p>
+      </div>
+    </section>
     <div class="canvas-wrap" id="canvas-wrap">
       <svg id="canvas" role="img" aria-label="Architecture canvas"></svg>
       <div class="canvas-controls">
@@ -37,7 +53,7 @@
   </main>
 
   <script src="https://d3js.org/d3.v7.min.js"></script>
-  <script src="data.js?v=L2labels3"></script>
-  <script src="app.js?v=L2labels3"></script>
+  <script src="data.js?v=landing2"></script>
+  <script src="app.js?v=landing2"></script>
 </body>
 </html>
