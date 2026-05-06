@@ -407,6 +407,6 @@ const CONNECTIONS = [
 ];
 
 const L1_OVERVIEW = {
-  title: 'A multi-agent loop for personal AI research',
-  paragraph: "I built this small multi-agent system to break a familiar creative block — the loop of either doom-scrolling for inspiration or stalling in front of a blank page. Each morning a curation agent reads how I reacted to yesterday's picks, nudges a private 1536-d taste vector, asks the embedding space which clusters I'm closest to, and fans targeted scrape queries out to arXiv, Reddit, and Twitter. Everything that comes back gets scored against my taste vector; the top fifteen become a short, opinionated briefing. A reporter agent then renders that briefing in a Streamlit app, captures my star ratings and follow-up questions, and funnels those signals back so the next day's run trains on sharper data. Click any numbered step to see exactly which calls pass between which modules.",
+  title: 'One daily cycle, mapped',
+  paragraph: "Two agents revolve around a shared embedding space. Steps 4–8 are the curator's morning batch run on EC2 — taste vector, clusters, scrape, score. Steps 1–3 are the always-on user loop that feeds ratings and chat back as the next day's signals. Click any numbered step to see the exact call site on GitHub.",
 };
