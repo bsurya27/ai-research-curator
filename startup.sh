@@ -35,6 +35,7 @@ sed -i "s/APIFY_API_TOKEN=.*/APIFY_API_TOKEN=$APIFY_API_TOKEN/" .env
 sed -i "s/ANTHROPIC_API_KEY=.*/ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY/" .env
 sed -i "s/OPENAI_API_KEY=.*/OPENAI_API_KEY=$OPENAI_API_KEY/" .env
 sed -i "s/EXA_API_KEY=.*/EXA_API_KEY=$EXA_API_KEY/" .env
+echo "EXA_API_KEY=$EXA_API_KEY" >> .env
 # Start rec model
 source venv/bin/activate
 echo "Activated venv"
