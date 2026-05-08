@@ -37,6 +37,9 @@ sed -i "s/OPENAI_API_KEY=.*/OPENAI_API_KEY=$OPENAI_API_KEY/" .env
 sed -i "s/EXA_API_KEY=.*/EXA_API_KEY=$EXA_API_KEY/" .env
 # Start rec model
 source venv/bin/activate
+echo "Activated venv"
+pip install -r requirements.txt
+echo "Installed requirements"
 echo "Starting rec model..."
 nohup python rec_model/app.py > /tmp/rec_model.log 2>&1 &
 REC_MODEL_PID=$!
