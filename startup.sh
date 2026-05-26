@@ -6,7 +6,7 @@ cd $PROJECT_DIR
 chmod +x "$PROJECT_DIR/startup.sh" "$PROJECT_DIR/shutdown.sh"
 git pull origin main
 # Load env vars
-export $(grep -v '^#' .env | xargs)
+
 
 # Restore ChromaDB from S3 if local copy doesn't exist
 CHROMA_DIR="$PROJECT_DIR/rec_model/data/chroma"
@@ -35,7 +35,7 @@ sed -i "s/APIFY_API_TOKEN=.*/APIFY_API_TOKEN=$APIFY_API_TOKEN/" .env
 sed -i "s/ANTHROPIC_API_KEY=.*/ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY/" .env
 sed -i "s/OPENAI_API_KEY=.*/OPENAI_API_KEY=$OPENAI_API_KEY/" .env
 sed -i "s/EXA_API_KEY=.*/EXA_API_KEY=$EXA_API_KEY/" .env
-echo "EXA_API_KEY=$EXA_API_KEY" >> .env
+export $(grep -v '^#' .env | xargs)
 # Start rec model
 source venv/bin/activate
 echo "Activated venv"
